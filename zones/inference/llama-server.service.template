@@ -1,0 +1,14 @@
+[Unit]
+Description=Speedbuild llama.cpp inference server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/llama.cpp/build/bin/llama-server --model ${MODEL_PATH} --alias ${SB_MODEL_ALIAS} --host 0.0.0.0 --port 8080 --api-key-file /etc/llama/api-keys.txt --threads ${SB_LLAMA_THREADS} --ctx-size ${SB_LLAMA_CTX_TOTAL} --parallel ${SB_LLAMA_PARALLEL} --cache-type-k q8_0 --cache-type-v q8_0 --flash-attn on --jinja --mlock --temp 1.0 --top-p 0.95 --min-p 0.01
+LimitMEMLOCK=infinity
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

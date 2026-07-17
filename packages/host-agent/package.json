@@ -1,0 +1,21 @@
+{
+  "name": "sb-host-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1",
+    "hono": "^4"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "bun-types": "^1",
+    "typescript": "^5"
+  }
+}

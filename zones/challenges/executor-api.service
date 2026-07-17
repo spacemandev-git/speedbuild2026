@@ -1,0 +1,17 @@
+[Unit]
+Description=Estate executor API
+After=network-online.target surfpool.service
+Wants=network-online.target
+Requires=surfpool.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/packages/executor-api
+ExecStart=/usr/local/bin/bun run /opt/packages/executor-api/src/index.ts
+EnvironmentFile=/etc/speedbuild.env
+Environment=ESTATE_DEPLOYER=/var/lib/estate/deployer.json
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

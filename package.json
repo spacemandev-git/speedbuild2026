@@ -1,0 +1,7 @@
+{
+  "name": "speedbuild",
+  "private": true,
+  "scripts": {
+    "lint:bash": "bash -n bootstrap.sh host/*.sh"
+  }
+}

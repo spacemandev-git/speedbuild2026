@@ -1,0 +1,8 @@
+node_modules/
+target/
+.env
+*.log
+.anchor/
+dist/
+.svelte-kit/
+/config/speedbuild.env

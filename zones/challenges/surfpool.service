@@ -1,0 +1,14 @@
+[Unit]
+Description=Estate Surfpool local Solana network
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/lib/surfpool
+ExecStart=/usr/local/bin/surfpool start --no-tui --no-studio --host 0.0.0.0 --port 8899 --ws-port 8900 --offline --db /var/lib/surfpool/state.sqlite --surfnet-id estate --airdrop-keypair-path /var/lib/estate/deployer.json
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "estate/${SB_MODEL_ALIAS}",
+  "provider": {
+    "estate": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Estate Inference",
+      "options": {
+        "baseURL": "http://10.61.0.30:8080/v1",
+        "apiKey": "{env:ESTATE_API_KEY}"
+      },
+      "models": {
+        "${SB_MODEL_ALIAS}": {
+          "limit": {
+            "context": ${SB_OPENCODE_CTX},
+            "output": 32768
+          }
+        }
+      }
+    }
+  }
+}

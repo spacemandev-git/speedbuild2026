@@ -1,0 +1,30 @@
+#!/bin/bash
+
+REAL_SHELL=/bin/bash
+LOGDIR=/var/log/sessions
+
+# Non-interactive / forced command (scp, sftp, ssh cmd): passthrough, no recording.
+if [ -n "$SSH_ORIGINAL_COMMAND" ] || { [ "$1" = "-c" ] && [ -n "$2" ]; }; then
+  CMD="${SSH_ORIGINAL_COMMAND:-$2}"
+  case "$CMD" in *sftp-server*|*internal-sftp*) exec /usr/lib/openssh/sftp-server ;; esac
+  exec "$REAL_SHELL" -c "$CMD"
+fi
+
+# Avoid recursive recording.
+if [ -n "$ASCIINEMA_SESSION" ]; then exec "$REAL_SHELL" -l; fi
+
+TS=$(date +%Y%m%d-%H%M%S)-$$
+
+# Live relay only when host-agent has installed a non-empty stream token.
+# Any recorder or relay failure falls through to a plain login shell.
+STREAM_TOKEN_FILE="/home/$USER/.config/asciinema/stream-token"
+# Attempt the relay only when the server answers; otherwise record locally.
+if [ -s "$STREAM_TOKEN_FILE" ] \
+  && curl -fsm 2 -o /dev/null "http://10.61.0.10:4000/" 2>/dev/null; then
+  asciinema session -o "$LOGDIR/${USER}-${TS}.cast" \
+    -r "$(cat "$STREAM_TOKEN_FILE")" -c "$REAL_SHELL -l" \
+    || exec "$REAL_SHELL" -l
+  exit 0
+fi
+asciinema session -o "$LOGDIR/${USER}-${TS}.cast" -c "$REAL_SHELL -l" \
+  || exec "$REAL_SHELL" -l

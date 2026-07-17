@@ -1,0 +1,24 @@
+{
+  "name": "estate-deploy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "ensure-spl": "bun run src/00-ensure-spl.ts",
+    "mint-scrip": "bun run src/10-mint-scrip.ts",
+    "deploy-registry": "bun run src/20-deploy-registry.ts",
+    "fund-and-seed": "bun run src/30-fund-and-seed.ts",
+    "dump-spl": "bun run src/dump-spl.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "latest",
+    "@solana/spl-token": "latest",
+    "@solana/web3.js": "^1.98.0",
+    "bs58": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "bun-types": "latest",
+    "typescript": "latest"
+  }
+}
