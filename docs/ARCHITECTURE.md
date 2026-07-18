@@ -9,12 +9,15 @@ API shapes, and per-component specs. Builder tasks implement exactly what is wri
 
 Host runs **Incus 7.0 LTS** (Zabbly `lts-7.0` repo), ZFS storage pool, one managed bridge.
 
-**Tenant mode (`SB_TENANT_MODE`, default `vm`)**: in production every tenant is an Incus **VM**
-(`--vm`, `images:ubuntu/24.04/cloud`, incus-agent for exec/file-push) so each can receive an
-SR-IOV VF of the E2100 by real PCIe/VFIO passthrough (§1a). `container` mode (used automatically
-when `SB_SMOKE_TEST=1`) keeps the identical layout with system containers and no VFs, for
-smoke-testing on hardware without the E2100/nested-virt guarantees. All scripts branch via
-helpers in `host/lib.sh`, never inline.
+**Tenant mode (`SB_TENANT_MODE`, default `container`)**: the validated, default operating mode is
+Incus **system containers** — this is what the Speed Build 2026 host runs (its two NICs are a
+single LACP management bond with no dedicated SR-IOV port or out-of-band recovery, so VF
+passthrough is not safe there). `vm` mode (`--vm`, `images:ubuntu/24.04/cloud`, incus-agent for
+exec/file-push) makes every tenant a VM so each can receive an SR-IOV VF by real PCIe/VFIO
+passthrough (§1a); enable it **only** with `SB_SRIOV_ENABLE=1`, `SB_SRIOV_PF` set to a *dedicated
+non-bonded* NIC port, and console/BMC recovery available. `SB_SMOKE_TEST=1` additionally forces
+container mode and small-scale resources regardless. All scripts branch via helpers in
+`host/lib.sh`, never inline.
 
 | Instance | Name | Mgmt IP (eth0) | Limits (default) | Runs |
 |---|---|---|---|---|

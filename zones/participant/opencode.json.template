@@ -1,7 +1,27 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "estate/${SB_MODEL_ALIAS}",
+  "model": "openrouter/z-ai/glm-5.2",
+  "mcp": {
+    "solana": {
+      "type": "remote",
+      "url": "https://mcp.solana.com/mcp",
+      "enabled": true
+    }
+  },
   "provider": {
+    "openrouter": {
+      "options": {
+        "apiKey": "{env:SUNBURST_OR_KEY}"
+      },
+      "models": {
+        "z-ai/glm-5.2": {
+          "limit": {
+            "context": ${SB_OPENCODE_CTX},
+            "output": 32768
+          }
+        }
+      }
+    },
     "estate": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "Estate Inference",

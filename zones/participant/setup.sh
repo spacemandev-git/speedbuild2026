@@ -134,16 +134,44 @@ if [[ ! -x /usr/local/bin/asciinema ]] \
 fi
 
 if [[ ! -x /usr/local/bin/opencode ]]; then
-  export OPENCODE_INSTALL_DIR=/usr/local/bin
   curl -fsSL https://opencode.ai/install | bash
-  unset OPENCODE_INSTALL_DIR
+  # The installer places the binary under /root/.opencode/bin regardless of
+  # OPENCODE_INSTALL_DIR (and /root is unreadable by claimant); publish the
+  # self-contained binary to a system path every user can execute.
+  for cand in /root/.opencode/bin/opencode "$HOME/.opencode/bin/opencode"; do
+    if [[ -x "$cand" ]]; then
+      install -m 0755 "$cand" /usr/local/bin/opencode
+      break
+    fi
+  done
+  command -v opencode >/dev/null || { echo "opencode install failed" >&2; exit 1; }
 fi
+
+# The OpenCode installer (curl | bash) clears /tmp on a fresh install, which can
+# delete our mktemp WORK_DIR; recreate it before writing staged config files.
+mkdir -p "$WORK_DIR"
 
 cat >"$WORK_DIR/estate-path.sh" <<'EOF'
 # System-wide Speedbuild participant toolchain.
+# RUSTUP_HOME/CARGO_HOME must be exported for every user or rustup cannot find
+# the system-installed default toolchain (cargo/rustc fail with "no default
+# toolchain configured"), which breaks `anchor build`/`cargo build`.
+export RUSTUP_HOME=/opt/rustup
+export CARGO_HOME=/opt/cargo
 export PATH="/opt/anchor/bin:/opt/solana/bin:/opt/cargo/bin:/usr/local/bin:$PATH"
 EOF
 install_managed_file "$WORK_DIR/estate-path.sh" /etc/profile.d/estate-path.sh 0644 root root
+
+# profile.d only applies to login shells. OpenCode's bash tool (and any other
+# non-login child) needs the toolchain on PATH too, so also set it in
+# /etc/environment, which PAM loads for every session type. RUSTUP_HOME/CARGO_HOME
+# go here as well so cargo/anchor work from those non-login contexts.
+cat >"$WORK_DIR/environment" <<'EOF'
+PATH="/opt/anchor/bin:/opt/solana/bin:/opt/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+RUSTUP_HOME="/opt/rustup"
+CARGO_HOME="/opt/cargo"
+EOF
+install_managed_file "$WORK_DIR/environment" /etc/environment 0644 root root
 
 if [[ ! -s "$SCRIPT_DIR/rec-shell" ]]; then
   echo "$SCRIPT_DIR/rec-shell is missing or empty" >&2

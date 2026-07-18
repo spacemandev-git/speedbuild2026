@@ -18,6 +18,7 @@ export interface Config {
   statePath: string;
   contentDir: string;
   hostLanHint: string;
+  sunburstOrKey?: string | undefined;
 }
 
 function required(env: Record<string, string | undefined>, name: string): string {
@@ -67,5 +68,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     statePath: env.STATE_PATH?.trim() || "/var/lib/speedbuild/state.json",
     contentDir: env.CONTENT_DIR?.trim() || "/opt/speedbuild/challenges-content",
     hostLanHint: env.SB_HOST_LAN_HINT?.trim() || "<host-lan-ip>",
+    // Shared OpenRouter key for the GLM 5.2 backup inference path. Optional:
+    // when unset, participants fall back to the local Estate provider only.
+    sunburstOrKey: env.SUNBURST_OR_KEY?.trim() || undefined,
   };
 }

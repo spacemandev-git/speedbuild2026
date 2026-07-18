@@ -175,6 +175,11 @@ export class ParticipantManager {
       `export ESTATE_API_KEY=${shellQuote(record.apiKey)}`,
       `export CLAIM_NUMBER=${shellQuote(record.claimNumber)}`,
       "export SOLANA_KEYPAIR=/home/claimant/.config/solana/id.json",
+      // Shared OpenRouter key powering the GLM 5.2 backup provider in
+      // opencode.json. Only emitted when configured on the host.
+      ...(this.config.sunburstOrKey
+        ? [`export SUNBURST_OR_KEY=${shellQuote(this.config.sunburstOrKey)}`]
+        : []),
       "",
     ].join("\n");
     await this.incus.filePushContent(environment, name, "/home/claimant/.estate-env", 0o600, uid);
