@@ -30,6 +30,8 @@ export type ParticipantRecord = {
   [key: string]: unknown;
 };
 
+export type RecordingInfo = { file: string; size: number };
+
 export type ZoneHealth = {
   name: string;
   status?: string;
@@ -219,6 +221,10 @@ export const hostAgent = {
     return request(HOST_AGENT_BASE, required('SB_HOST_AGENT_TOKEN'), `/participants/${encodeSegment(name)}`);
   },
 
+  recordings(name: string): Promise<{ name: string; recordings: RecordingInfo[] }> {
+    return request(HOST_AGENT_BASE, required('SB_HOST_AGENT_TOKEN'), `/participants/${encodeSegment(name)}/recordings`);
+  },
+
   provision(name?: string): Promise<ParticipantRecord> {
     return request(HOST_AGENT_BASE, required('SB_HOST_AGENT_TOKEN'), '/participants', {
       method: 'POST',
@@ -274,5 +280,17 @@ export function fetchExecutorEvents(signal?: AbortSignal): Promise<Response> {
       authorization: `Bearer ${required('SB_ADMIN_TOKEN')}`
     },
     signal
+  });
+}
+
+export function fetchRecordingArchive(name: string): Promise<Response> {
+  return fetch(`${HOST_AGENT_BASE}/participants/${encodeSegment(name)}/recordings/archive`, {
+    headers: { authorization: `Bearer ${required('SB_HOST_AGENT_TOKEN')}` }
+  });
+}
+
+export function fetchAllRecordingsArchive(): Promise<Response> {
+  return fetch(`${HOST_AGENT_BASE}/recordings/archive`, {
+    headers: { authorization: `Bearer ${required('SB_HOST_AGENT_TOKEN')}` }
   });
 }

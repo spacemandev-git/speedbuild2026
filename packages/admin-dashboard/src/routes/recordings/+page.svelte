@@ -1,4 +1,5 @@
 <script lang="ts">
+  let { data } = $props();
   let serverUrl = $state('');
 
   $effect(() => {
@@ -12,17 +13,41 @@
   <div>
     <p class="eyebrow">Permanent witness</p>
     <h1>Recordings</h1>
-    <p>Browse archived casts and active streams held by the estate’s asciinema server.</p>
+    <p>Export terminal session recordings for every claimant in the estate.</p>
   </div>
-  {#if serverUrl}<a class="button secondary" href={serverUrl} target="_blank" rel="noreferrer">Open asciinema server</a>{/if}
+  <div class="action-row">
+    <a class="button" href="/recordings/archive" download>Export all recordings</a>
+    {#if serverUrl}<a class="button secondary" href={serverUrl} target="_blank" rel="noreferrer">Open asciinema server</a>{/if}
+  </div>
 </div>
 
 <div class="notice">
-  Raw fallback <code>.cast</code> files remain inside each participant container at <code>/var/log/sessions/</code>.
+  The browser can’t embed the asciinema server directly. Use these buttons to download the raw <code>.cast</code>
+  recordings pulled from each claimant box at <code>/var/log/sessions/</code>.
 </div>
 
-{#if serverUrl}
-  <iframe class="recording-frame" src={serverUrl} title="Asciinema recordings and streams"></iframe>
+{#if data.loadError}
+  <div class="error-banner">{data.loadError}</div>
+{/if}
+
+{#if data.participants.length === 0}
+  <div class="panel empty-state">No claimants are available for recording export.</div>
 {:else}
-  <div class="panel empty-state">Locating the asciinema archive…</div>
+  <div class="table-shell">
+    <table>
+      <thead>
+        <tr><th>Claimant</th><th>Recordings</th></tr>
+      </thead>
+      <tbody>
+        {#each data.participants as participant (participant.name)}
+          <tr>
+            <td class="code">{participant.name}</td>
+            <td>
+              <a class="button ghost small" href={`/recordings/${encodeURIComponent(participant.name)}/archive`} download>Download .cast</a>
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
 {/if}

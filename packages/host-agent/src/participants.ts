@@ -5,6 +5,7 @@ import { EXECUTOR_ADMIN_BASE } from "./config.ts";
 import { provisionStream, pushStreamCredentials } from "./asciinema.ts";
 import { IncusClient, IncusError, validateIncusName } from "./incus.ts";
 import { generatePassword } from "./password.ts";
+import { archiveRecordings, bundleArchives, listRecordings, type RecordingInfo } from "./recordings.ts";
 import type { HostAgentState, ParticipantRecord } from "./state.ts";
 import { StateStore } from "./state.ts";
 
@@ -306,6 +307,39 @@ export class ParticipantManager {
     if (!record) throw new ParticipantError("participant not found", 404);
     const live = instances.find((instance) => instance.name === name);
     return this.view(name, { ...record, status: live?.status ?? "Missing" });
+  }
+
+  async recordings(name: string): Promise<{ name: string; recordings: RecordingInfo[] }> {
+    await this.get(name);
+    return { name, recordings: await listRecordings(this.incus, name) };
+  }
+
+  async recordingsArchive(name: string): Promise<{ filename: string; bytes: Uint8Array }> {
+    await this.get(name);
+    const recordings = await listRecordings(this.incus, name);
+    if (recordings.length === 0) {
+      throw new ParticipantError("no recordings", 404, `${name} has no session recordings`);
+    }
+    return { filename: `${name}-recordings.tar.gz`, bytes: await archiveRecordings(this.incus, name) };
+  }
+
+  async recordingsArchiveAll(): Promise<{ filename: string; bytes: Uint8Array }> {
+    const participants = await this.list();
+    const entries: Array<{ name: string; bytes: Uint8Array }> = [];
+    for (const participant of participants) {
+      try {
+        const recordings = await listRecordings(this.incus, participant.name);
+        if (recordings.length === 0) continue;
+        entries.push({ name: participant.name, bytes: await archiveRecordings(this.incus, participant.name) });
+      } catch {
+        // Best-effort: skip boxes that are stopped or unreachable rather than failing the whole export.
+        continue;
+      }
+    }
+    if (entries.length === 0) {
+      throw new ParticipantError("no recordings", 404, "no participant has session recordings");
+    }
+    return { filename: "estate-recordings.tar", bytes: await bundleArchives(entries) };
   }
 
   private async pushRoom(name: string, room: Room): Promise<void> {

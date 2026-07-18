@@ -40,6 +40,17 @@ async function jsonObject(context: Context): Promise<Record<string, unknown>> {
   return value as Record<string, unknown>;
 }
 
+function archiveResponse(bytes: Uint8Array, filename: string, contentType: string): Response {
+  return new Response(new Uint8Array(bytes), {
+    status: 200,
+    headers: {
+      "content-type": contentType,
+      "content-disposition": `attachment; filename="${filename}"`,
+      "content-length": String(bytes.byteLength),
+    },
+  });
+}
+
 export function createApp(config: Config, participants: ParticipantManager, zones: ZoneMonitor): Hono {
   const app = new Hono();
 
@@ -73,8 +84,19 @@ export function createApp(config: Config, participants: ParticipantManager, zone
 
   app.get("/health", (context) => context.json({ ok: true }));
   app.get("/zones", async (context) => context.json(await zones.getZones()));
+  app.get("/recordings/archive", async () => {
+    const { filename, bytes } = await participants.recordingsArchiveAll();
+    return archiveResponse(bytes, filename, "application/x-tar");
+  });
   app.get("/participants", async (context) => context.json(await participants.list()));
   app.get("/participants/:name", async (context) => context.json(await participants.get(context.req.param("name"))));
+  app.get("/participants/:name/recordings", async (context) =>
+    context.json(await participants.recordings(context.req.param("name"))));
+
+  app.get("/participants/:name/recordings/archive", async (context) => {
+    const { filename, bytes } = await participants.recordingsArchive(context.req.param("name"));
+    return archiveResponse(bytes, filename, "application/gzip");
+  });
 
   app.post("/participants", async (context) => {
     const body = await jsonObject(context);
