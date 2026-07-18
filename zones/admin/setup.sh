@@ -105,5 +105,19 @@ RestartSec=3
 WantedBy=multi-user.target
 UNIT
 
+# adapter-node derives its own origin from the request; behind the host's TCP
+# proxy (public IP/domain on the dashboard port) that guess is wrong, so
+# SvelteKit rejects login POSTs with "Cross-site POST form submissions are
+# forbidden". Set SB_DASHBOARD_ORIGIN to the browser-facing URL to fix it.
+if [[ -n "${SB_DASHBOARD_ORIGIN:-}" ]]; then
+  install -d -m 0755 /etc/systemd/system/sb-dashboard.service.d
+  cat > /etc/systemd/system/sb-dashboard.service.d/origin.conf <<EOF
+[Service]
+Environment=ORIGIN=${SB_DASHBOARD_ORIGIN}
+EOF
+else
+  rm -f /etc/systemd/system/sb-dashboard.service.d/origin.conf 2>/dev/null || true
+fi
+
 systemctl daemon-reload
 systemctl enable --now sb-dashboard.service
