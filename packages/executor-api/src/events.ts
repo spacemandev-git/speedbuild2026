@@ -66,18 +66,27 @@ export class EventHub {
 
   stream(history = 50, signal?: AbortSignal): ReadableStream<Uint8Array> {
     let activeController: ReadableStreamDefaultController<Uint8Array> | undefined;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
     return new ReadableStream<Uint8Array>({
       start: (controller) => {
         activeController = controller;
         for (const row of this.db.recentEvents(history)) controller.enqueue(sse(parseRow(row)));
         controller.enqueue(encoder.encode(": executor event stream connected\n\n"));
         this.clients.add(controller);
+        // Keep the connection non-idle so Bun.serve's idleTimeout can't reset a
+        // quiet long-poll (comment frames are ignored by SSE clients).
+        heartbeat = setInterval(() => {
+          try { controller.enqueue(encoder.encode(": ping\n\n")); }
+          catch { if (heartbeat) clearInterval(heartbeat); this.clients.delete(controller); }
+        }, 5_000);
         signal?.addEventListener("abort", () => {
+          if (heartbeat) clearInterval(heartbeat);
           this.clients.delete(controller);
           try { controller.close(); } catch { /* already closed */ }
         }, { once: true });
       },
       cancel: () => {
+        if (heartbeat) clearInterval(heartbeat);
         if (activeController) this.clients.delete(activeController);
       },
     });
