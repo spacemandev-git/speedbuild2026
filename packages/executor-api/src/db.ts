@@ -101,11 +101,15 @@ export class EstateDatabase {
   }
 
   listRoom1WatchCandidates(): ClaimantRow[] {
+    // Watch every unproven claimant, not only those with a recorded room1
+    // reveal. A tribute can only match when it carries the claimant's exact
+    // nonce-derived amount + memo, so proving is already self-gating; requiring
+    // a reveal row here silently drops valid solves whenever the reveal was
+    // delivered out-of-band or the executor reveal call never landed.
     return this.sqlite.query(`
-      SELECT c.* FROM claimants c
-      INNER JOIN reveals r ON r.claim_number = c.claim_number AND r.room = 'room1'
-      WHERE c.room1_status != 'PROVEN'
-      ORDER BY c.claim_number
+      SELECT * FROM claimants
+      WHERE room1_status != 'PROVEN'
+      ORDER BY claim_number
     `).all() as ClaimantRow[];
   }
 

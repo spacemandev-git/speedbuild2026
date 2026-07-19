@@ -1,9 +1,11 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { readFile, rename, writeFile } from "node:fs/promises";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import type { Config } from "./config.ts";
-import { HOST_AGENT_HOST, HOST_AGENT_PORT, loadConfig } from "./config.ts";
+import { EXECUTOR_ADMIN_BASE, HOST_AGENT_HOST, HOST_AGENT_PORT, loadConfig } from "./config.ts";
 import { IncusClient, IncusError } from "./incus.ts";
+import { EstateNotifier } from "./notifier.ts";
 import { isRoom, ParticipantError, ParticipantManager } from "./participants.ts";
 import { StateStore } from "./state.ts";
 import { ZoneMonitor } from "./zones.ts";
@@ -158,16 +160,57 @@ export function startServer(config = loadConfig()): Bun.Server<unknown> {
     fetch: app.fetch,
   });
 
+  let server: Bun.Server<unknown>;
   try {
-    const server = serve(HOST_AGENT_HOST);
+    server = serve(HOST_AGENT_HOST);
     console.log(`sb-host-agent listening on http://${HOST_AGENT_HOST}:${HOST_AGENT_PORT}`);
-    return server;
   } catch (error) {
     console.warn(`warning: could not bind ${HOST_AGENT_HOST}:${HOST_AGENT_PORT}; falling back to 0.0.0.0 (${error instanceof Error ? error.message : String(error)})`);
-    const server = serve("0.0.0.0");
+    server = serve("0.0.0.0");
     console.log(`sb-host-agent listening on http://0.0.0.0:${HOST_AGENT_PORT}`);
-    return server;
   }
+
+  try {
+    const cursorPath = `${config.statePath}.notify-cursor`;
+    const notifier = new EstateNotifier({
+      eventsUrl: `${EXECUTOR_ADMIN_BASE}/events`,
+      stateUrl: `${EXECUTOR_ADMIN_BASE}/state`,
+      adminToken: config.adminToken,
+      incusExec: (container, argv, options) => incus.exec(container, argv, options),
+      loadParticipants: async () => (await stateStore.load()).participants,
+      readCursor: async () => {
+        try {
+          const body: unknown = JSON.parse(await readFile(cursorPath, "utf8"));
+          if (
+            typeof body === "object"
+            && body !== null
+            && "lastEventId" in body
+            && typeof body.lastEventId === "number"
+            && Number.isFinite(body.lastEventId)
+          ) return body.lastEventId;
+          return null;
+        } catch (error) {
+          if (error instanceof SyntaxError) return null;
+          if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
+          throw error;
+        }
+      },
+      writeCursor: async (id) => {
+        const temporaryPath = `${cursorPath}.tmp-${process.pid}`;
+        await writeFile(temporaryPath, JSON.stringify({ lastEventId: id }), { mode: 0o600 });
+        await rename(temporaryPath, cursorPath);
+      },
+    });
+    notifier.start();
+  } catch (error) {
+    console.warn(JSON.stringify({
+      component: "notify",
+      warning: "notifier failed to start",
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
+  return server;
 }
 
 if (import.meta.main) startServer();
