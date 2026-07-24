@@ -4,13 +4,13 @@
   let { form }: { form: ActionData } = $props();
 </script>
 
-<svelte:head><title>Bureau admin access · The Bureau</title></svelte:head>
+<svelte:head><title>Bureau Access · The Bureau</title></svelte:head>
 
 <main class="login-shell">
   <section class="login-card">
     <span class="brand-mark">B</span>
     <p class="eyebrow">Restricted access</p>
-    <h1>Bureau admin</h1>
+    <h1>Bureau Access</h1>
     <p>Enter the administrator token to open the operations console.</p>
     {#if form?.invalid}<div class="error-banner">Invalid administrator token.</div>{/if}
     <form method="POST">
