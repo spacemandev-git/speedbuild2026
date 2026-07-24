@@ -3,27 +3,27 @@ use solana_instructions_sysvar::{self as instructions, load_instruction_at_check
 use solana_sha256_hasher::hashv;
 
 use crate::{
-    constants::{DEED_SEED, MAX_NAME_LEN, MEMO_PROGRAM_ID, TEAM_SEED},
+    constants::{DEED_SEED, HOLDINGS_SEED, MAX_NAME_LEN, MEMO_PROGRAM_ID},
     error::ErrorCode,
-    state::{Deed, TeamHoldings},
+    state::{ClaimHoldings, Deed},
 };
 
 #[derive(Accounts)]
-#[instruction(team_name: String)]
+#[instruction(claim_number: String)]
 pub struct MintDeed<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     #[account(
         mut,
-        seeds = [TEAM_SEED, team_name.as_bytes()],
+        seeds = [HOLDINGS_SEED, claim_number.as_bytes()],
         bump
     )]
-    pub holdings: Account<'info, TeamHoldings>,
+    pub holdings: Account<'info, ClaimHoldings>,
     #[account(
         init_if_needed,
         payer = payer,
         space = 8 + Deed::INIT_SPACE,
-        seeds = [DEED_SEED, team_name.as_bytes()],
+        seeds = [DEED_SEED, claim_number.as_bytes()],
         bump
     )]
     pub deed: Account<'info, Deed>,
@@ -35,10 +35,10 @@ pub struct MintDeed<'info> {
 
 pub fn handle_mint_deed(
     ctx: Context<MintDeed>,
-    team_name: String,
+    claim_number: String,
     memo_hash: [u8; 32],
 ) -> Result<()> {
-    if team_name.len() > MAX_NAME_LEN {
+    if claim_number.len() > MAX_NAME_LEN {
         return Err(ProgramError::InvalidArgument.into());
     }
 
@@ -62,14 +62,14 @@ pub fn handle_mint_deed(
 
     let issued_slot = Clock::get()?.slot;
     let slot_bytes = issued_slot.to_le_bytes();
-    let digest = hashv(&[team_name.as_bytes(), &memo_hash, &slot_bytes]);
+    let digest = hashv(&[claim_number.as_bytes(), &memo_hash, &slot_bytes]);
     let encoded = bs58::encode(digest.to_bytes()).into_string();
     let deed_code: [u8; 8] = encoded.as_bytes()[..8]
         .try_into()
         .map_err(|_| ProgramError::InvalidInstructionData)?;
 
     let deed = &mut ctx.accounts.deed;
-    deed.team = team_name;
+    deed.claim = claim_number;
     deed.deed_code = deed_code;
     deed.issued_slot = issued_slot;
     deed.presented = false;

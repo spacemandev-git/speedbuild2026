@@ -26,7 +26,7 @@ All deploy steps are idempotent and run in numeric order:
 sudo /opt/zone/run-deploy.sh
 ```
 
-To use a non-default claimant/team registry:
+To use a non-default claimant registry:
 
 ```bash
 sudo /opt/zone/run-deploy.sh /var/lib/estate/my-claimants.json
@@ -39,9 +39,6 @@ re-runs the seed step. Its format is:
 {
   "claimants": [
     { "claimNumber": "CLAIMANT-01", "pubkey": "<base58 public key>" }
-  ],
-  "teams": [
-    { "name": "ROOK", "registrarKey": "<base58 public key>" }
   ]
 }
 ```

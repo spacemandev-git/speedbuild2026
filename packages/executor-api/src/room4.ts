@@ -15,30 +15,30 @@ export function createRoom4App(ctx: AppContext): Hono {
   const app = new Hono();
 
   app.post("/deed/present", async (c) => {
-    const body = await c.req.json<{ team?: unknown; code?: unknown }>();
-    if (typeof body.team !== "string" || body.team.length < 1 || body.team.length > 16) {
-      return c.json({ error: "team must be between 1 and 16 characters" }, 400);
+    const body = await c.req.json<{ claim?: unknown; code?: unknown }>();
+    if (typeof body.claim !== "string" || body.claim.length < 1 || body.claim.length > 16) {
+      return c.json({ error: "claim must be between 1 and 16 characters" }, 400);
     }
     if (typeof body.code !== "string" || !BASE58_CODE.test(body.code)) {
       return c.json({ error: "code must be exactly 8 base58 characters" }, 400);
     }
     try {
-      const signature = await ctx.chain.presentDeed(body.team, body.code);
+      const signature = await ctx.chain.presentDeed(body.claim, body.code);
       let deed = null;
       let statusReadError: string | undefined;
       try {
-        deed = await ctx.chain.getDeed(body.team);
+        deed = await ctx.chain.getDeed(body.claim);
       } catch (error) {
         statusReadError = error instanceof Error ? error.message : String(error);
       }
-      const message = `${body.team}: deed registered. Title acknowledged. Exposure assessed.`;
+      const message = `${body.claim}: deed registered. Title acknowledged. Exposure assessed.`;
       ctx.events.emit({
         type: "room4.presented", room: "room4", message,
-        data: { team: body.team, code: body.code, signature, deed, statusReadError },
+        data: { claim: body.claim, code: body.code, signature, deed, statusReadError },
       });
       ctx.events.emit({
         type: "combo.reveal", room: "room4", message,
-        data: { team: body.team, deedCode: body.code },
+        data: { claim: body.claim, deedCode: body.code },
       });
       return c.json({ ok: true, signature, deed, statusReadError });
     } catch (error) {
@@ -48,10 +48,10 @@ export function createRoom4App(ctx: AppContext): Hono {
     }
   });
 
-  app.get("/deed/:team/status", async (c) => {
-    const team = c.req.param("team");
-    if (team.length < 1 || team.length > 16) return c.json({ error: "invalid team" }, 400);
-    const deed = await ctx.chain.getDeed(team);
+  app.get("/deed/:claim/status", async (c) => {
+    const claim = c.req.param("claim");
+    if (claim.length < 1 || claim.length > 16) return c.json({ error: "invalid claim" }, 400);
+    const deed = await ctx.chain.getDeed(claim);
     return deed ? c.json(deed) : c.json({ error: "deed not found" }, 404);
   });
 

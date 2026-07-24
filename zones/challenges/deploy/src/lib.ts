@@ -138,9 +138,12 @@ export function claimPda(programId: PublicKey, claimNumber: string): PublicKey {
   )[0];
 }
 
-export function teamPda(programId: PublicKey, teamName: string): PublicKey {
+export function holdingsPda(
+  programId: PublicKey,
+  claimNumber: string,
+): PublicKey {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("team"), Buffer.from(teamName, "utf8")],
+    [Buffer.from("holdings"), Buffer.from(claimNumber, "utf8")],
     programId,
   )[0];
 }

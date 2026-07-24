@@ -38,10 +38,6 @@ export class EstateDatabase {
         room1_status TEXT NOT NULL DEFAULT 'UNPROVEN',
         created_at TEXT NOT NULL
       );
-      CREATE TABLE IF NOT EXISTS teams (
-        name TEXT PRIMARY KEY,
-        registrar_key TEXT NOT NULL
-      );
       CREATE TABLE IF NOT EXISTS reveals (
         claim_number TEXT NOT NULL,
         room TEXT NOT NULL,
@@ -155,11 +151,6 @@ export class EstateDatabase {
     return this.sqlite.query(`
       SELECT * FROM (SELECT * FROM events ORDER BY id DESC LIMIT ?) ORDER BY id ASC
     `).all(limit) as StoredEventRow[];
-  }
-
-  listTeams(): Array<{ name: string; registrar_key: string }> {
-    return this.sqlite.query("SELECT * FROM teams ORDER BY name")
-      .all() as Array<{ name: string; registrar_key: string }>;
   }
 
   close(): void {

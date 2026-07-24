@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ErrorCode {
-    #[msg("The required team registrar account is missing")]
+    #[msg("The required claim registrar account is missing")]
     RegistrarMissing,
     #[msg("The required memo instruction is missing")]
     MemoMissing,

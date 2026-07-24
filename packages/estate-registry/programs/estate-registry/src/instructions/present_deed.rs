@@ -7,14 +7,14 @@ use crate::{
 };
 
 #[derive(Accounts)]
-#[instruction(team_name: String)]
+#[instruction(claim_number: String)]
 pub struct PresentDeed<'info> {
     pub authority: Signer<'info>,
     #[account(seeds = [CONFIG_SEED], bump)]
     pub config: Account<'info, Config>,
     #[account(
         mut,
-        seeds = [DEED_SEED, team_name.as_bytes()],
+        seeds = [DEED_SEED, claim_number.as_bytes()],
         bump
     )]
     pub deed: Account<'info, Deed>,
@@ -23,7 +23,7 @@ pub struct PresentDeed<'info> {
 
 pub fn handle_present_deed(
     ctx: Context<PresentDeed>,
-    _team_name: String,
+    _claim_number: String,
     code: String,
 ) -> Result<()> {
     require_keys_eq!(

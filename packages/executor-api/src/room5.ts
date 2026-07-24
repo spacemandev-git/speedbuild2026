@@ -63,7 +63,7 @@ interface TraversalState {
 }
 
 export interface Room5Score {
-  team: string;
+  claim: string;
   hops_correct: number;
   flash_seconds: number;
   token: string;
@@ -98,15 +98,15 @@ function defaultSettler(ctx: AppContext): Room5Settler {
   ) => Promise<SettlementInspection>)(xPaymentHeader, ctx);
 }
 
-export function deriveRoom5Route(secret: string, team: string, decoyPositions: readonly number[] = DEFAULT_DECOY_POSITIONS): Room5Route {
+export function deriveRoom5Route(secret: string, claim: string, decoyPositions: readonly number[] = DEFAULT_DECOY_POSITIONS): Room5Route {
   const nodes = Array.from({ length: ROUTE_LENGTH }, (_, index) => {
     const position = index + 1;
-    return `n_${hmac(secret, team, `room5:pos:${position}`).toString("hex").slice(0, 4)}`;
+    return `n_${hmac(secret, claim, `room5:pos:${position}`).toString("hex").slice(0, 4)}`;
   });
   const decoys = new Map<number, string>();
   for (const position of decoyPositions) {
     if (Number.isInteger(position) && position >= 2 && position <= ROUTE_LENGTH) {
-      decoys.set(position, `d_${hmac(secret, team, `room5:decoy:${position}`).toString("hex").slice(0, 4)}`);
+      decoys.set(position, `d_${hmac(secret, claim, `room5:decoy:${position}`).toString("hex").slice(0, 4)}`);
     }
   }
   return { nodes, decoys };
@@ -129,13 +129,13 @@ function readJson<T>(value: string | null, fallback: T): T {
   try { return JSON.parse(value) as T; } catch { return fallback; }
 }
 
-function loadTraversal(ctx: AppContext, team: string): TraversalState {
-  return readJson(ctx.db.getRoomState(team, "room5", "traversal"), initialState());
+function loadTraversal(ctx: AppContext, claim: string): TraversalState {
+  return readJson(ctx.db.getRoomState(claim, "room5", "traversal"), initialState());
 }
 
-function configuredDecoys(ctx: AppContext, team: string): number[] {
+function configuredDecoys(ctx: AppContext, claim: string): number[] {
   const rows = ctx.db.listRoomState().filter((row) => row.room === "room5"
-    && (row.claim_number === "*" || row.claim_number === team)
+    && (row.claim_number === "*" || row.claim_number === claim)
     && (row.key === "config" || row.key === "decoy_positions"));
   let positions: unknown = DEFAULT_DECOY_POSITIONS;
   for (const row of rows) {
@@ -151,10 +151,6 @@ function configuredDecoys(ctx: AppContext, team: string): number[] {
   if (!Array.isArray(positions)) return [...DEFAULT_DECOY_POSITIONS];
   const normalized = positions.filter((item): item is number => Number.isInteger(item) && Number(item) >= 2 && Number(item) <= ROUTE_LENGTH);
   return [...new Set(normalized)];
-}
-
-function teamExists(ctx: AppContext, team: string): boolean {
-  return ctx.db.listTeams().some((row) => row.name === team);
 }
 
 async function paymentTerms(ctx: AppContext): Promise<PaymentTerms> {
@@ -214,20 +210,20 @@ function hopPayload(position: number, route: Room5Route): HopPayload {
   };
 }
 
-const teamLocks = new Map<string, Promise<void>>();
+const claimLocks = new Map<string, Promise<void>>();
 
-async function withTeamLock<T>(team: string, work: () => Promise<T>): Promise<T> {
-  const previous = teamLocks.get(team) ?? Promise.resolve();
+async function withClaimLock<T>(claim: string, work: () => Promise<T>): Promise<T> {
+  const previous = claimLocks.get(claim) ?? Promise.resolve();
   let release = (): void => {};
   const gate = new Promise<void>((resolve) => { release = resolve; });
   const tail = previous.then(() => gate);
-  teamLocks.set(team, tail);
+  claimLocks.set(claim, tail);
   await previous;
   try {
     return await work();
   } finally {
     release();
-    if (teamLocks.get(team) === tail) teamLocks.delete(team);
+    if (claimLocks.get(claim) === tail) claimLocks.delete(claim);
   }
 }
 
@@ -237,17 +233,17 @@ function createRouter(runtime: () => Room5Runtime | null): Hono {
   const handle = async (c: Context, requestedId: string) => {
     const active = runtime();
     if (!active) return c.json({ error: "the ledger room has not yet been opened" }, 503);
-    const team = c.req.query("team");
-    if (!team || !teamExists(active.ctx, team)) {
-      return c.json({ error: "the ledger recognizes no such team" }, 400);
+    const claim = c.req.query("claim");
+    if (!claim || !active.ctx.db.getClaimant(claim)) {
+      return c.json({ error: "the ledger recognizes no such claimant" }, 400);
     }
 
-    return withTeamLock(team, async () => {
-      const state = loadTraversal(active.ctx, team);
+    return withClaimLock(claim, async () => {
+      const state = loadTraversal(active.ctx, claim);
       const stored = state.responses[requestedId];
       if (stored) return c.json(stored);
 
-      const route = deriveRoom5Route(active.ctx.config.estateSecret, team, configuredDecoys(active.ctx, team));
+      const route = deriveRoom5Route(active.ctx.config.estateSecret, claim, configuredDecoys(active.ctx, claim));
       let position: number | undefined;
       let decoy = false;
       if (requestedId === "start") position = 1;
@@ -293,12 +289,12 @@ function createRouter(runtime: () => Room5Runtime | null): Hono {
         state.decoysPaid += 1;
         state.streakBroken = true;
         state.responses[requestedId] = payload;
-        active.ctx.db.setRoomState(team, "room5", "traversal", state);
+        active.ctx.db.setRoomState(claim, "room5", "traversal", state);
         active.ctx.events.emit({
           type: "room5.decoy-paid",
           room: "room5",
-          message: `${team}: wasted payment. The false ledger entry has been itemised.`,
-          data: { team, node: requestedId, position, signature: settlement.signature, payerPubkey: settlement.payerPubkey },
+          message: `${claim}: wasted payment. The false ledger entry has been itemised.`,
+          data: { claim, node: requestedId, position, signature: settlement.signature, payerPubkey: settlement.payerPubkey },
         });
         return c.json(payload);
       }
@@ -312,16 +308,16 @@ function createRouter(runtime: () => Room5Runtime | null): Hono {
           if (firstNode) state.responses[firstNode] = payload;
         }
         state.currentPosition = position + 1;
-        active.ctx.db.setRoomState(team, "room5", "traversal", state);
+        active.ctx.db.setRoomState(claim, "room5", "traversal", state);
         return c.json(payload);
       }
 
       const hopsCorrect = Math.max(0, ROUTE_LENGTH - state.decoysPaid - state.skipped);
       const score: Room5Score = {
-        team,
+        claim,
         hops_correct: hopsCorrect,
         flash_seconds: flashSeconds(hopsCorrect),
-        token: hmac(active.ctx.config.estateSecret, team, `room5:token:${hopsCorrect}`).toString("hex").slice(0, 32),
+        token: hmac(active.ctx.config.estateSecret, claim, `room5:token:${hopsCorrect}`).toString("hex").slice(0, 32),
         completed_at: new Date().toISOString(),
       };
       const payload: FinalPayload = {
@@ -332,12 +328,12 @@ function createRouter(runtime: () => Room5Runtime | null): Hono {
       state.responses[requestedId] = payload;
       state.currentPosition = ROUTE_LENGTH + 1;
       state.completed = true;
-      active.ctx.db.setRoomState(team, "room5", "traversal", state);
-      active.ctx.db.setRoomState(team, "room5", "scoreboard", score);
+      active.ctx.db.setRoomState(claim, "room5", "traversal", state);
+      active.ctx.db.setRoomState(claim, "room5", "scoreboard", score);
       active.ctx.events.emit({
         type: "room5.route-complete",
         room: "room5",
-        message: `${team} — ROUTE ${score.hops_correct}/7 — MERCY ${score.flash_seconds}s`,
+        message: `${claim} — ROUTE ${score.hops_correct}/7 — MERCY ${score.flash_seconds}s`,
         data: { ...score, decoysPaid: state.decoysPaid, skipped: state.skipped, settlementSignature: settlement.signature },
       });
       return c.json(payload);
@@ -354,7 +350,7 @@ function createRouter(runtime: () => Room5Runtime | null): Hono {
       .flatMap((row) => {
         try { return [JSON.parse(row.value) as Room5Score]; } catch { return []; }
       })
-      .sort((left, right) => left.team.localeCompare(right.team));
+      .sort((left, right) => left.claim.localeCompare(right.claim));
     return c.json(scores);
   });
   return router;

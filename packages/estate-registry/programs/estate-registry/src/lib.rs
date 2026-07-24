@@ -29,20 +29,32 @@ pub mod estate_registry {
         instructions::mark_proven::handle_mark_proven(ctx, claim_number)
     }
 
-    pub fn init_team(
-        ctx: Context<InitTeam>,
-        team_name: String,
+    pub fn init_claim_holdings(
+        ctx: Context<InitClaimHoldings>,
+        claim_number: String,
         registrar_key: Pubkey,
     ) -> Result<()> {
-        instructions::init_team::handle_init_team(ctx, team_name, registrar_key)
+        instructions::init_claim_holdings::handle_init_claim_holdings(
+            ctx,
+            claim_number,
+            registrar_key,
+        )
     }
 
-    pub fn mint_deed(ctx: Context<MintDeed>, team_name: String, memo_hash: [u8; 32]) -> Result<()> {
-        instructions::mint_deed::handle_mint_deed(ctx, team_name, memo_hash)
+    pub fn mint_deed(
+        ctx: Context<MintDeed>,
+        claim_number: String,
+        memo_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::mint_deed::handle_mint_deed(ctx, claim_number, memo_hash)
     }
 
-    pub fn present_deed(ctx: Context<PresentDeed>, team_name: String, code: String) -> Result<()> {
-        instructions::present_deed::handle_present_deed(ctx, team_name, code)
+    pub fn present_deed(
+        ctx: Context<PresentDeed>,
+        claim_number: String,
+        code: String,
+    ) -> Result<()> {
+        instructions::present_deed::handle_present_deed(ctx, claim_number, code)
     }
 
     pub fn set_deed_window(ctx: Context<SetDeedWindow>, new_window: u64) -> Result<()> {

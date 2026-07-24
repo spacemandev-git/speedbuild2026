@@ -18,7 +18,7 @@ export interface ClaimRecord {
 
 export interface DeedRecord {
   address: string;
-  team: string;
+  claim: string;
   deedCode: string;
   issuedSlot: bigint;
   presented: boolean;
@@ -45,18 +45,18 @@ export function decodeClaimRecord(data: Uint8Array, address = ""): ClaimRecord {
 export function decodeDeed(data: Uint8Array, address = ""): DeedRecord {
   requireLength(data, 12, "Deed");
   const bytes = Buffer.from(data);
-  const teamLength = bytes.readUInt32LE(8);
-  if (teamLength > 16) throw new Error(`Deed team string exceeds 16 bytes (${teamLength})`);
-  const endOfTeam = 12 + teamLength;
-  requireLength(bytes, endOfTeam + 17, "Deed");
-  const team = bytes.subarray(12, endOfTeam).toString("utf8");
-  const deedCode = bytes.subarray(endOfTeam, endOfTeam + 8).toString("utf8");
+  const claimLength = bytes.readUInt32LE(8);
+  if (claimLength > 16) throw new Error(`Deed claim string exceeds 16 bytes (${claimLength})`);
+  const endOfClaim = 12 + claimLength;
+  requireLength(bytes, endOfClaim + 17, "Deed");
+  const claim = bytes.subarray(12, endOfClaim).toString("utf8");
+  const deedCode = bytes.subarray(endOfClaim, endOfClaim + 8).toString("utf8");
   return {
     address,
-    team,
+    claim,
     deedCode,
-    issuedSlot: bytes.readBigUInt64LE(endOfTeam + 8),
-    presented: bytes[endOfTeam + 16] === 1,
+    issuedSlot: bytes.readBigUInt64LE(endOfClaim + 8),
+    presented: bytes[endOfClaim + 16] === 1,
   };
 }
 
@@ -150,9 +150,9 @@ export class EstateChain {
     )[0];
   }
 
-  async deedPda(teamName: string): Promise<PublicKey> {
+  async deedPda(claim: string): Promise<PublicKey> {
     return PublicKey.findProgramAddressSync(
-      [Buffer.from("deed"), Buffer.from(teamName, "utf8")],
+      [Buffer.from("deed"), Buffer.from(claim, "utf8")],
       await this.getProgramId(),
     )[0];
   }
@@ -179,20 +179,20 @@ export class EstateChain {
     return method(claimNumber).accounts({ config, claim: claimRecord, authority }).rpc();
   }
 
-  async presentDeed(teamName: string, code: string): Promise<string> {
+  async presentDeed(claim: string, code: string): Promise<string> {
     const [program, authority, config, deed] = await Promise.all([
       this.getProgram(),
       this.getDeployer().then((keypair) => keypair.publicKey),
       this.configPda(),
-      this.deedPda(teamName),
+      this.deedPda(claim),
     ]);
     const method = program.methods.presentDeed;
     if (!method) throw new Error("estate_registry IDL does not expose presentDeed");
-    return method(teamName, code).accounts({ config, deed, authority }).rpc();
+    return method(claim, code).accounts({ config, deed, authority }).rpc();
   }
 
-  async getDeed(teamName: string): Promise<DeedRecord | null> {
-    const address = await this.deedPda(teamName);
+  async getDeed(claim: string): Promise<DeedRecord | null> {
+    const address = await this.deedPda(claim);
     const account = await this.connection.getAccountInfo(address, "confirmed");
     return account ? decodeDeed(account.data, address.toBase58()) : null;
   }

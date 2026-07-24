@@ -7,7 +7,7 @@ pub const CONFIG_SEED: &[u8] = b"config";
 pub const CLAIM_SEED: &[u8] = b"claim";
 
 #[constant]
-pub const TEAM_SEED: &[u8] = b"team";
+pub const HOLDINGS_SEED: &[u8] = b"holdings";
 
 #[constant]
 pub const DEED_SEED: &[u8] = b"deed";

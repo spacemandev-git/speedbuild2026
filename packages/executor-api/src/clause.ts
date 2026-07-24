@@ -12,31 +12,6 @@ function revealed(ctx: AppContext, room: string, claim?: string): boolean {
   return ctx.db.listReveals().some((row) => row.room === room && (claim === undefined || row.claim_number === claim));
 }
 
-function stringFromState(value: string): string | null {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (typeof parsed === "string") return parsed;
-    if (typeof parsed === "object" && parsed !== null) {
-      const record = parsed as { team?: unknown; teamName?: unknown; team_name?: unknown };
-      const candidate = record.team ?? record.teamName ?? record.team_name;
-      return typeof candidate === "string" ? candidate : null;
-    }
-  } catch { /* ignore malformed optional mapping */ }
-  return null;
-}
-
-export function claimantTeam(ctx: AppContext, claim: string): string | null {
-  const columns = ctx.db.sqlite.query("PRAGMA table_info(claimants)").all() as Array<{ name: string }>;
-  for (const column of ["team", "team_name"] as const) {
-    if (!columns.some((entry) => entry.name === column)) continue;
-    const row = ctx.db.sqlite.query(`SELECT ${column} AS team FROM claimants WHERE claim_number = ?`).get(claim) as { team: string | null } | null;
-    if (row?.team) return row.team;
-  }
-  const row = ctx.db.listRoomState().find((entry) => entry.claim_number === claim
-    && ["team", "teamName", "team_name", "claimant_team"].includes(entry.key));
-  return row ? stringFromState(row.value) : null;
-}
-
 export function createClauseApp(ctx: AppContext): Hono {
   const app = new Hono();
 
@@ -76,23 +51,18 @@ export function createClauseApp(ctx: AppContext): Hono {
       if (room === "room4") {
         const programId = (await ctx.chain.getProgramId()).toBase58();
         if (claim === undefined) return c.json({ ...common, programId, farTerminalUrl: `${PUBLIC_BASE}/deed/present` });
-        const teamName = claimantTeam(ctx, claim);
-        const saltSubject = teamName ?? claim;
         return c.json({
           ...common,
           programId,
-          teamName,
-          attemptSalt: hmac(ctx.config.estateSecret, saltSubject, "room4:salt").toString("hex").slice(0, 8),
+          attemptSalt: hmac(ctx.config.estateSecret, claim, "room4:salt").toString("hex").slice(0, 8),
           farTerminalUrl: `${PUBLIC_BASE}/deed/present`,
         });
       }
       if (room === "room5") {
         if (claim === undefined) return c.json(common);
-        const teamName = claimantTeam(ctx, claim);
         return c.json({
           ...common,
-          teamName,
-          startUrl: teamName === null ? null : `${PUBLIC_LEDGER_BASE}/node/start?team=${encodeURIComponent(teamName)}`,
+          startUrl: `${PUBLIC_LEDGER_BASE}/node/start?claim=${encodeURIComponent(claim)}`,
         });
       }
       return c.json({

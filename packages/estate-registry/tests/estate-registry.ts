@@ -20,8 +20,8 @@ describe("estate_registry", () => {
   const claimNumber = "CLAIMANT-07";
   const probateNonce = new anchor.BN("72623859790382856");
   const tributeAta = Keypair.generate().publicKey;
-  const happyTeam = "red-team";
-  const staleTeam = "blue-team";
+  const happyClaimNumber = "CLAIMANT-01";
+  const staleClaimNumber = "CLAIMANT-02";
 
   const [config] = PublicKey.findProgramAddressSync(
     [Buffer.from("config")],
@@ -32,19 +32,19 @@ describe("estate_registry", () => {
     program.programId
   );
   const [happyHoldings] = PublicKey.findProgramAddressSync(
-    [Buffer.from("team"), Buffer.from(happyTeam)],
+    [Buffer.from("holdings"), Buffer.from(happyClaimNumber)],
     program.programId
   );
   const [happyDeed] = PublicKey.findProgramAddressSync(
-    [Buffer.from("deed"), Buffer.from(happyTeam)],
+    [Buffer.from("deed"), Buffer.from(happyClaimNumber)],
     program.programId
   );
   const [staleHoldings] = PublicKey.findProgramAddressSync(
-    [Buffer.from("team"), Buffer.from(staleTeam)],
+    [Buffer.from("holdings"), Buffer.from(staleClaimNumber)],
     program.programId
   );
   const [staleDeed] = PublicKey.findProgramAddressSync(
-    [Buffer.from("deed"), Buffer.from(staleTeam)],
+    [Buffer.from("deed"), Buffer.from(staleClaimNumber)],
     program.programId
   );
 
@@ -123,13 +123,13 @@ describe("estate_registry", () => {
     expect((await program.account.claimRecord.fetch(claim)).status).to.equal(1);
   });
 
-  it("initializes team holdings", async () => {
-    for (const [teamName, holdings] of [
-      [happyTeam, happyHoldings],
-      [staleTeam, staleHoldings],
+  it("initializes claim holdings", async () => {
+    for (const [claimNumber, holdings] of [
+      [happyClaimNumber, happyHoldings],
+      [staleClaimNumber, staleHoldings],
     ] as const) {
       await program.methods
-        .initTeam(teamName, registrar.publicKey)
+        .initClaimHoldings(claimNumber, registrar.publicKey)
         .accountsPartial({
           authority,
           config,
@@ -151,11 +151,25 @@ describe("estate_registry", () => {
     const memoHash = Buffer.alloc(32, 0x11);
 
     await expectAnchorError(
-      mintDeed(happyTeam, happyHoldings, happyDeed, memoHash, SystemProgram.programId, true),
+      mintDeed(
+        happyClaimNumber,
+        happyHoldings,
+        happyDeed,
+        memoHash,
+        SystemProgram.programId,
+        true
+      ),
       "RegistrarMissing"
     );
     await expectAnchorError(
-      mintDeed(happyTeam, happyHoldings, happyDeed, memoHash, registrar.publicKey, false),
+      mintDeed(
+        happyClaimNumber,
+        happyHoldings,
+        happyDeed,
+        memoHash,
+        registrar.publicKey,
+        false
+      ),
       "MemoMissing"
     );
   });
@@ -166,7 +180,7 @@ describe("estate_registry", () => {
       "hex"
     );
     await mintDeed(
-      happyTeam,
+      happyClaimNumber,
       happyHoldings,
       happyDeed,
       memoHash,
@@ -177,12 +191,12 @@ describe("estate_registry", () => {
     let deed = await program.account.deed.fetch(happyDeed);
     const code = Buffer.from(deed.deedCode).toString("ascii");
     expect(code).to.match(/^[1-9A-HJ-NP-Za-km-z]{8}$/);
-    expect(deed.team).to.equal(happyTeam);
+    expect(deed.claim).to.equal(happyClaimNumber);
     expect(deed.presented).to.equal(false);
 
     await expectAnchorError(
       program.methods
-        .presentDeed(happyTeam, "wrong123")
+        .presentDeed(happyClaimNumber, "wrong123")
         .accountsPartial({
           authority,
           config,
@@ -194,7 +208,7 @@ describe("estate_registry", () => {
     );
 
     await program.methods
-      .presentDeed(happyTeam, code)
+      .presentDeed(happyClaimNumber, code)
       .accountsPartial({
         authority,
         config,
@@ -207,7 +221,7 @@ describe("estate_registry", () => {
 
     await expectAnchorError(
       mintDeed(
-        happyTeam,
+        happyClaimNumber,
         happyHoldings,
         happyDeed,
         memoHash,
@@ -227,7 +241,7 @@ describe("estate_registry", () => {
     try {
       const memoHash = Buffer.alloc(32, 0x42);
       await mintDeed(
-        staleTeam,
+        staleClaimNumber,
         staleHoldings,
         staleDeed,
         memoHash,
@@ -241,7 +255,7 @@ describe("estate_registry", () => {
 
       await expectAnchorError(
         program.methods
-          .presentDeed(staleTeam, code)
+          .presentDeed(staleClaimNumber, code)
           .accountsPartial({
             authority,
             config,
@@ -260,7 +274,7 @@ describe("estate_registry", () => {
   });
 
   function mintDeed(
-    teamName: string,
+    claimNumber: string,
     holdings: PublicKey,
     deed: PublicKey,
     memoHash: Buffer,
@@ -268,7 +282,7 @@ describe("estate_registry", () => {
     includeMemo: boolean
   ): Promise<string> {
     const builder = program.methods
-      .mintDeed(teamName, [...memoHash])
+      .mintDeed(claimNumber, [...memoHash])
       .accountsPartial({
         payer: authority,
         holdings,

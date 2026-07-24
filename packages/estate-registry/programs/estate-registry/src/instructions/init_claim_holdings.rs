@@ -1,14 +1,14 @@
 use anchor_lang::prelude::*;
 
 use crate::{
-    constants::{CONFIG_SEED, MAX_NAME_LEN, TEAM_SEED},
+    constants::{CONFIG_SEED, HOLDINGS_SEED, MAX_NAME_LEN},
     error::ErrorCode,
-    state::{Config, TeamHoldings},
+    state::{ClaimHoldings, Config},
 };
 
 #[derive(Accounts)]
-#[instruction(team_name: String)]
-pub struct InitTeam<'info> {
+#[instruction(claim_number: String)]
+pub struct InitClaimHoldings<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
     #[account(seeds = [CONFIG_SEED], bump)]
@@ -16,17 +16,17 @@ pub struct InitTeam<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + TeamHoldings::INIT_SPACE,
-        seeds = [TEAM_SEED, team_name.as_bytes()],
+        space = 8 + ClaimHoldings::INIT_SPACE,
+        seeds = [HOLDINGS_SEED, claim_number.as_bytes()],
         bump
     )]
-    pub holdings: Account<'info, TeamHoldings>,
+    pub holdings: Account<'info, ClaimHoldings>,
     pub system_program: Program<'info, System>,
 }
 
-pub fn handle_init_team(
-    ctx: Context<InitTeam>,
-    team_name: String,
+pub fn handle_init_claim_holdings(
+    ctx: Context<InitClaimHoldings>,
+    claim_number: String,
     registrar_key: Pubkey,
 ) -> Result<()> {
     require_keys_eq!(
@@ -34,7 +34,7 @@ pub fn handle_init_team(
         ctx.accounts.authority.key(),
         ErrorCode::Unauthorized
     );
-    if team_name.len() > MAX_NAME_LEN {
+    if claim_number.len() > MAX_NAME_LEN {
         return Err(ProgramError::InvalidArgument.into());
     }
 

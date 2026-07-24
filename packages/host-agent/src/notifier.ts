@@ -24,13 +24,6 @@ export interface NotifierDeps {
   log?: (entry: Record<string, unknown>) => void;
 }
 
-interface RoomStateRow {
-  claimNumber: string;
-  room: string;
-  key: string;
-  value: unknown;
-}
-
 const ROOM_LABELS: Record<string, string> = {
   room1: "CLAUSE I · Provenance",
   room2: "CLAUSE II · The Vault Wing",
@@ -39,8 +32,6 @@ const ROOM_LABELS: Record<string, string> = {
   room5: "CLAUSE V · The Route",
   bonus: "Bonus Duties",
 };
-
-const TEAM_KEYS = new Set(["team", "teamName", "team_name", "claimant_team"]);
 
 const DELIVERY_SCRIPT = `set -u
 inbox="/home/claimant/estate/inbox.md"
@@ -95,6 +86,31 @@ export function resolveDirectTargets(event: ExecutorEvent): NotifyTarget[] {
     })];
   }
 
+  if (
+    event.type === "combo.reveal"
+    && event.room === "room4"
+    && typeof event.data.claim === "string"
+  ) {
+    return [noticeTarget(event.data.claim, {
+      room: "room4",
+      headline: "SATISFIED",
+      message: event.message,
+      unlockLabel: "Deed code",
+      unlock: String(event.data.deedCode),
+    })];
+  }
+
+  if (
+    event.type === "room5.route-complete"
+    && typeof event.data.claim === "string"
+  ) {
+    return [noticeTarget(event.data.claim, {
+      room: "room5",
+      headline: "ROUTE RECONSTRUCTED",
+      message: event.message,
+    })];
+  }
+
   if (event.type === "combo.reveal" && event.room === "room3" && isPlainObject(event.data.unlocks)) {
     return Object.entries(event.data.unlocks).flatMap(([claimNumber, fragment]) => {
       if (typeof fragment !== "string") return [];
@@ -135,67 +151,6 @@ export function resolveDirectTargets(event: ExecutorEvent): NotifyTarget[] {
   }
 
   return [];
-}
-
-function teamNameFromValue(value: unknown): string | null {
-  if (typeof value === "string") {
-    try {
-      const parsed: unknown = JSON.parse(value);
-      if (parsed !== value) return teamNameFromValue(parsed);
-    } catch {
-      // State values may already be decoded strings.
-    }
-    return value;
-  }
-  if (!isPlainObject(value)) return null;
-  for (const key of ["team", "teamName", "team_name"] as const) {
-    if (typeof value[key] === "string") return value[key];
-  }
-  return null;
-}
-
-export async function resolveTeamTargets(
-  event: ExecutorEvent,
-  fetchState: () => Promise<RoomStateRow[]>,
-): Promise<NotifyTarget[]> {
-  let team: string;
-  let notice: Parameters<typeof formatNotice>[0];
-
-  if (
-    event.type === "combo.reveal"
-    && event.room === "room4"
-    && typeof event.data.team === "string"
-  ) {
-    team = event.data.team;
-    notice = {
-      room: "room4",
-      headline: "SATISFIED",
-      message: event.message,
-      unlockLabel: "Deed code",
-      unlock: String(event.data.deedCode),
-    };
-  } else if (
-    event.type === "room5.route-complete"
-    && typeof event.data.team === "string"
-  ) {
-    team = event.data.team;
-    notice = {
-      room: "room5",
-      headline: "ROUTE RECONSTRUCTED",
-      message: event.message,
-    };
-  } else {
-    return [];
-  }
-
-  const members = new Set<string>();
-  for (const row of await fetchState()) {
-    if (TEAM_KEYS.has(row.key) && teamNameFromValue(row.value) === team) {
-      members.add(row.claimNumber);
-    }
-  }
-  const text = formatNotice(notice);
-  return [...members].map((claimNumber) => ({ claimNumber, text }));
 }
 
 function isAbortError(error: unknown): boolean {
@@ -264,16 +219,7 @@ export class EstateNotifier {
     await this.initializeCursor(false);
     if (this.cursor !== null && event.id <= this.cursor) return;
 
-    let targets = resolveDirectTargets(event);
-    if (targets.length === 0) {
-      targets = await resolveTeamTargets(event, () => this.fetchState());
-      const team = typeof event.data.team === "string" ? event.data.team : null;
-      const isTeamEvent = (event.type === "combo.reveal" && event.room === "room4")
-        || event.type === "room5.route-complete";
-      if (isTeamEvent && team !== null && targets.length === 0) {
-        this.log({ component: "notify", skip: "no-team-members", team, eventId: event.id });
-      }
-    }
+    const targets = resolveDirectTargets(event);
 
     if (targets.length > 0) {
       const participants = await this.deps.loadParticipants();
@@ -303,23 +249,6 @@ export class EstateNotifier {
       this.cursorInitialized = true;
     }
     if (forStart && this.cursor === null) this.seedMode = true;
-  }
-
-  private async fetchState(): Promise<RoomStateRow[]> {
-    const response = await this.fetcher(this.deps.stateUrl, {
-      headers: { Authorization: `Bearer ${this.deps.adminToken}` },
-      signal: this.abortController?.signal ?? null,
-    });
-    if (!response.ok) throw new Error(`executor state request failed with status ${response.status}`);
-    const body: unknown = await response.json();
-    if (!isPlainObject(body) || !Array.isArray(body.roomState)) return [];
-    return body.roomState.filter((row): row is RoomStateRow => {
-      return isPlainObject(row)
-        && typeof row.claimNumber === "string"
-        && typeof row.room === "string"
-        && typeof row.key === "string"
-        && "value" in row;
-    });
   }
 
   private async finalizeSeed(): Promise<void> {

@@ -49,7 +49,7 @@ async function appendClaimant(path: string, claimant: RegistryClaimant): Promise
   await mkdir(dirname(path), { recursive: true });
   const registry = wrapped
     ? { ...(current as object), claimants: next }
-    : { claimants: next, teams: [] };
+    : { claimants: next };
   await writeFile(path, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
 }
 
@@ -158,7 +158,6 @@ export function createAdminApp(ctx: AppContext): Hono {
     });
     return c.json({
       claimants: ctx.db.listClaimants(),
-      teams: ctx.db.listTeams(),
       reveals: ctx.db.listReveals(),
       roomState: parsedRoomState(ctx),
       recentEvents: events,

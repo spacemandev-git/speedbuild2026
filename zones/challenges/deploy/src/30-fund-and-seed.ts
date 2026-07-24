@@ -1,5 +1,5 @@
 /**
- * Fund claimant wallets and initialize exact registry ClaimRecord/TeamHoldings PDAs.
+ * Fund claimant wallets and initialize exact registry ClaimRecord/ClaimHoldings PDAs.
  * Usage: bun run src/30-fund-and-seed.ts [claimants.json] [--help]
  */
 
@@ -15,11 +15,11 @@ import {
   claimPda,
   connection,
   errorMessage,
+  holdingsPda,
   isHelpRequest,
   loadKeypair,
   loadRegistryProgram,
   SCRIP_MINT_PATH,
-  teamPda,
 } from "./lib";
 
 interface ClaimantInput {
@@ -27,14 +27,8 @@ interface ClaimantInput {
   pubkey: string;
 }
 
-interface TeamInput {
-  name: string;
-  registrarKey: string;
-}
-
 interface SeedInput {
   claimants: ClaimantInput[];
-  teams: TeamInput[];
 }
 
 interface StoredMint {
@@ -47,8 +41,11 @@ function validateInput(value: unknown): SeedInput {
     throw new Error("seed input must be a JSON object");
   }
   const candidate = value as Partial<SeedInput>;
-  if (!Array.isArray(candidate.claimants) || !Array.isArray(candidate.teams)) {
-    throw new Error('seed input must contain "claimants" and "teams" arrays');
+  if (!Array.isArray(candidate.claimants)) {
+    throw new Error('seed input must contain a "claimants" array');
+  }
+  if (Object.keys(value).some((key) => key !== "claimants")) {
+    throw new Error('seed input may contain only a "claimants" array');
   }
   for (const claimant of candidate.claimants) {
     if (
@@ -59,17 +56,6 @@ function validateInput(value: unknown): SeedInput {
       Buffer.byteLength(claimant.claimNumber, "utf8") > 16
     ) {
       throw new Error("each claimant needs claimNumber (1..16 UTF-8 bytes) and pubkey");
-    }
-  }
-  for (const team of candidate.teams) {
-    if (
-      !team ||
-      typeof team.name !== "string" ||
-      typeof team.registrarKey !== "string" ||
-      team.name.length === 0 ||
-      Buffer.byteLength(team.name, "utf8") > 16
-    ) {
-      throw new Error("each team needs name (1..16 UTF-8 bytes) and registrarKey");
     }
   }
   return candidate as SeedInput;
@@ -152,22 +138,31 @@ async function seedClaimant(
   console.log(`Initialized claim ${claimant.claimNumber} (${signature})`);
 }
 
-async function seedTeam(program: Program, team: TeamInput): Promise<void> {
-  const holdings = teamPda(program.programId, team.name);
+async function seedClaimHoldings(
+  program: Program,
+  claimant: ClaimantInput,
+): Promise<void> {
+  const holdings = holdingsPda(program.programId, claimant.claimNumber);
   if (await connection.getAccountInfo(holdings, "confirmed")) {
-    console.log(`Team ${team.name} already initialized at ${holdings}`);
+    console.log(
+      `Claim holdings ${claimant.claimNumber} already initialized at ${holdings}`,
+    );
     return;
   }
 
-  const initTeam = program.methods.initTeam;
-  if (!initTeam) {
-    throw new Error("Registry IDL does not define the init_team instruction");
+  const initClaimHoldings = program.methods.initClaimHoldings;
+  if (!initClaimHoldings) {
+    throw new Error(
+      "Registry IDL does not define the init_claim_holdings instruction",
+    );
   }
-  const signature = await initTeam(
-    team.name,
-    new PublicKey(team.registrarKey),
+  const signature = await initClaimHoldings(
+    claimant.claimNumber,
+    new PublicKey(claimant.pubkey),
   ).rpc();
-  console.log(`Initialized team ${team.name} (${signature})`);
+  console.log(
+    `Initialized claim holdings ${claimant.claimNumber} (${signature})`,
+  );
 }
 
 async function main(): Promise<void> {
@@ -182,14 +177,14 @@ async function main(): Promise<void> {
   const inputPath = process.argv[2] ?? "/var/lib/estate/claimants.json";
   const inputFile = Bun.file(inputPath);
   if (!(await inputFile.exists())) {
-    await Bun.write(inputPath, '{\n  "claimants": [],\n  "teams": []\n}\n');
+    await Bun.write(inputPath, '{\n  "claimants": []\n}\n');
     console.log(`Created empty seed skeleton at ${inputPath}; nothing to seed yet.`);
     return;
   }
 
   const input = validateInput(await inputFile.json());
-  if (input.claimants.length === 0 && input.teams.length === 0) {
-    console.log(`No claimants or teams in ${inputPath}; nothing to seed.`);
+  if (input.claimants.length === 0) {
+    console.log(`No claimants in ${inputPath}; nothing to seed.`);
     return;
   }
 
@@ -208,9 +203,7 @@ async function main(): Promise<void> {
 
   for (const claimant of input.claimants) {
     await seedClaimant(program, mint, tributeAccount.address, secret, claimant);
-  }
-  for (const team of input.teams) {
-    await seedTeam(program, team);
+    await seedClaimHoldings(program, claimant);
   }
 }
 

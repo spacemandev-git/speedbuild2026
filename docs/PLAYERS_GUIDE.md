@@ -174,11 +174,12 @@ params from the clause endpoint, decode from bytes, chain each step's output int
 hardcode.** Concretely:
 
 - **Solana decode-and-prove rooms (Reading Room, Burned Wing).** Derive the PDA with the *exact*
-  seeds (watch case-sensitivity — claim numbers are lowercased in seeds). Fetch the account, decode
-  it byte-by-byte from the offset table. The classic time sinks are **endianness** (a `u64` is
-  little-endian) and **hashing raw bytes vs. the hex string** — get those right. Where a room wants a
-  "tribute" or a `mint_deed`, the transaction must carry the **SPL Memo instruction in the same
-  transaction** as the transfer/instruction. The standard SDK path usually leaves it out.
+  seeds (watch case-sensitivity — the Reading Room lowercases your claim number, while the Burned
+  Wing uses it verbatim). Fetch the account, decode it byte-by-byte from the offset table. The
+  classic time sinks are **endianness** (a `u64` is little-endian) and **hashing raw bytes vs. the
+  hex string** — get those right. Where a room wants a "tribute" or a `mint_deed`, the transaction
+  must carry the **SPL Memo instruction in the same transaction** as the transfer/instruction. The
+  standard SDK path usually leaves it out.
 
 - **x402 payment rooms (Vault Wing, Séance Room).** The naive move — pointing `x402-fetch`/`x402-axios`
   at the URL — pays but omits the required memo, and the estate will *keep your fee and give you
@@ -216,8 +217,8 @@ in-game choice:
 2. **The Executor's Mercy.** If you're truly blocked, a floor marshal can release your correct
    combination/deed from the ops console — but it is **priced against the burning pot and announced
    on screen**. Mercy is real and mercy is expensive; spend it deliberately.
-3. **Team rooms degrade gracefully.** The group rooms (Séance, Ledger) resolve to a lower-tier
-   outcome rather than halting the whole team on one stuck laptop.
+3. **Each participant proceeds independently.** One stuck laptop does not halt anyone else's
+   route or outcome; every claimant can keep working and receive their own result.
 
 ---
 

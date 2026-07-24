@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExecutorEvent, NotifierDeps } from "../src/notifier.ts";
-import { EstateNotifier, resolveDirectTargets, resolveTeamTargets } from "../src/notifier.ts";
+import { EstateNotifier, resolveDirectTargets } from "../src/notifier.ts";
 
 function event(overrides: Partial<ExecutorEvent> = {}): ExecutorEvent {
   return {
@@ -66,45 +66,40 @@ describe("resolveDirectTargets", () => {
     expect(bonus[0]?.text).toContain("DUTY RECORDED");
   });
 
-  test("ignores paired solve events and team-only events", () => {
-    expect(resolveDirectTargets(event({ type: "room1.proven" }))).toEqual([]);
-    expect(resolveDirectTargets(event({
+  test("notifies the room 4 claimant with the deed code", () => {
+    const targets = resolveDirectTargets(event({
       room: "room4",
       claimNumber: null,
-      data: { team: "alpha", deedCode: "DEED-1" },
-    }))).toEqual([]);
-    expect(resolveDirectTargets(event({
+      data: { claim: "CLAIMANT-04", deedCode: "DEED-04" },
+    }));
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.claimNumber).toBe("CLAIMANT-04");
+    expect(targets[0]?.text).toContain("SATISFIED");
+    expect(targets[0]?.text).toContain("Deed code: DEED-04");
+  });
+
+  test("notifies the room 5 claimant with the route-complete notice", () => {
+    const targets = resolveDirectTargets(event({
       type: "room5.route-complete",
       room: "room5",
       claimNumber: null,
-      data: { team: "alpha", hops_correct: 5, flash_seconds: 10 },
-    }))).toEqual([]);
+      message: "Five hops reconstructed in 10 seconds.",
+      data: { claim: "CLAIMANT-05", hops_correct: 5, flash_seconds: 10 },
+    }));
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.claimNumber).toBe("CLAIMANT-05");
+    expect(targets[0]?.text).toContain("ROUTE RECONSTRUCTED");
+    expect(targets[0]?.text).toContain("Five hops reconstructed in 10 seconds.");
   });
-});
 
-describe("resolveTeamTargets", () => {
-  test("resolves every room 4 member of the named team", async () => {
-    const targets = await resolveTeamTargets(event({
-      room: "room4",
+  test("ignores paired solve events and unrelated room 5 events", () => {
+    expect(resolveDirectTargets(event({ type: "room1.proven" }))).toEqual([]);
+    expect(resolveDirectTargets(event({
+      type: "room5.decoy-paid",
+      room: "room5",
       claimNumber: null,
-      data: { team: "alpha", deedCode: "DEED-ALPHA" },
-    }), async () => [
-      { claimNumber: "CLAIMANT-01", room: "room4", key: "team", value: "alpha" },
-      { claimNumber: "CLAIMANT-02", room: "room4", key: "teamName", value: { teamName: "alpha" } },
-      { claimNumber: "CLAIMANT-03", room: "room4", key: "team_name", value: "beta" },
-    ]);
-    expect(targets.map((target) => target.claimNumber).sort()).toEqual(["CLAIMANT-01", "CLAIMANT-02"]);
-    expect(targets.every((target) => target.text.includes("DEED-ALPHA"))).toBe(true);
-  });
-
-  test("does not fetch state for non-team events", async () => {
-    let fetched = false;
-    const targets = await resolveTeamTargets(event({ type: "room1.proven" }), async () => {
-      fetched = true;
-      return [];
-    });
-    expect(targets).toEqual([]);
-    expect(fetched).toBe(false);
+      data: { claim: "CLAIMANT-05", node: "NODE-1" },
+    }))).toEqual([]);
   });
 });
 

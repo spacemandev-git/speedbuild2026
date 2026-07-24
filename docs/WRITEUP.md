@@ -3,7 +3,7 @@
 *Spoiler document. This is the operator/reference solution for every room of The Estate,
 written against the actual verifier code in `packages/executor-api/src/*` and the on-chain
 program in `packages/estate-registry/`. It is not the claimant-facing brief — see
-`docs/PLAYERS_GUIDE.md` for that. Read this to run the show, unblock a stuck team, or grade a
+`docs/PLAYERS_GUIDE.md` for that. Read this to run the show, unblock a stuck claimant, or grade a
 submission.*
 
 Every value a claimant needs is **per-claimant** and **served live** from the clause endpoint
@@ -84,7 +84,7 @@ Gotchas that match the verifier (`deriveRoom1Requirements`):
 your authority, `amount` exact, and the memo string present among the transaction's memo
 instructions. The `Room1Watcher` polls the `tribute_ata` signatures; on a match it calls
 `mark_proven` and emits the room-1 four-digit combo. A near-miss (right destination, wrong
-amount/memo) emits a `room1.rejected` diagnostic on the executor feed — use it to debug a team.
+amount/memo) emits a `room1.rejected` diagnostic on the executor feed — use it to debug a claim.
 
 **Why AI-resistant:** the layout is unlabeled (no IDL), endianness and "hash the bytes not the
 hex string" are silent, and the standard SPL transfer snippet omits the memo.
@@ -138,8 +138,8 @@ amount is a lie (`0`); and both hops need a memo/carry the SDK path never sends.
 
 ## Clause III — The Séance Room (`room3.ts`) — Shamir + a trust decision
 
-**Goal:** each of six claimants recovers a *true* 4-of-6 Shamir share; the team votes which four
-to combine. Two players were bribed and hold poison shares that pass the checksum.
+**Goal:** each of six claimants recovers a *true* 4-of-6 Shamir share; the claimants decide which
+four to combine. Two players were bribed and hold poison shares that pass the checksum.
 
 ### 1. Get your fragment — **self-settle, do not use the broker**
 `GET /fragment/$CLAIM` returns `402` with two `accepts`:
@@ -190,41 +190,43 @@ XOR misses.
 
 ## Clause IV — The Burned Wing (`room4.ts` + `mint_deed.rs`/`present_deed.rs`) — bearer deed
 
-**Goal:** mint a witnessed, memorialized team deed on-chain, then present its fresh code at the
-far terminal before it goes stale. Team-scoped.
+**Goal:** mint your witnessed, memorialized deed on-chain, then present its fresh code at the far
+terminal before it goes stale. Claim-scoped.
 
-### 1. Params + read team holdings
+### 1. Params + read claim holdings
 ```sh
-curl "http://10.61.0.20:8700/clause/room4?claim=$CLAIM_NUMBER"   # -> programId, teamName, attemptSalt, farTerminalUrl
+curl "http://10.61.0.20:8700/clause/room4?claim=$CLAIM_NUMBER"   # -> programId, claimNumber, attemptSalt, farTerminalUrl
 ```
 ```
-holdingsPda = findProgramAddress(["team", utf8(team_name)], programId)
+holdingsPda = findProgramAddress(["holdings", utf8(claim_number)], programId)
 ```
-Decode (`state.rs::TeamHoldings`): `8..40 registrar_key`, `40 deeds_minted`. You need the
+Use the claim number exactly as issued (`$CLAIM_NUMBER`), verbatim and case-sensitive.
+Decode (`state.rs::ClaimHoldings`): `8..40 registrar_key`, `40 deeds_minted`. You need the
 `registrar_key` — the minting must be witnessed by it.
 
-### 2. Call `mint_deed(team_name, memo_hash)`
+### 2. Call `mint_deed(claim_number, memo_hash)`
 ```
-memo_hash = sha256( utf8(team_name) || utf8(attempt_salt) )     // 32 bytes; attempt_salt from clause endpoint
+memo_hash = sha256( utf8(claim_number) || utf8(attempt_salt) )  // 32 bytes; attempt_salt from clause endpoint
 ```
 The instruction (`mint_deed.rs`) enforces, in the **same transaction**:
-- **Registrar witness:** pass the `registrar_key` as the **first `remaining_account`**; the program
-  requires `registrar.key() == holdings.registrar_key` (`RegistrarMissing` otherwise).
+- **Registrar witness:** pass the `registrar_key` as the **first `remaining_account`**. It is not
+  a signer; read it from holdings bytes and pass it. The program requires
+  `registrar.key() == holdings.registrar_key` (`RegistrarMissing` otherwise).
 - **Memorialization:** an SPL **Memo** instruction whose data is the **lowercase hex** (64 ASCII
   chars) of `memo_hash`; the program scans the Instructions sysvar for it (`MemoMissing`
   otherwise). Include the Instructions sysvar account (`Sysvar1nstructions1111111111111111111111111`).
-- Accounts: `payer` (signer), `holdings` PDA, `deed` PDA (`["deed", team]`), instructions sysvar,
-  system program, then `registrar_key` as remaining account.
+- Accounts: `payer` (signer), `holdings` PDA, `deed` PDA (`["deed", claim]`), instructions
+  sysvar, system program, then `registrar_key` as remaining account.
 
 The program computes and stores
-`deed_code = bs58( sha256(team || memo_hash || issued_slot_le) )[..8]` (8 ASCII base58 chars) and
+`deed_code = bs58( sha256(claim || memo_hash || issued_slot_le) )[..8]` (8 ASCII base58 chars) and
 records `issued_slot`.
 
 ### 3. Read the deed code and present it — quickly
-Decode `deed` PDA (`Deed`: `team` String, then `deed_code[8]`, `issued_slot u64`, `presented`
-bool) to read the 8-char code. Then:
+Decode `deed` PDA (`Deed`: `claim` String(≤16), then `deed_code[8]`, `issued_slot u64`,
+`presented` bool) to read the 8-char code. Then:
 ```sh
-curl -X POST http://10.61.0.20:8700/deed/present -d '{"team":"<team>","code":"<8 chars>"}'
+curl -X POST http://10.61.0.20:8700/deed/present -d '{"claim":"<claim>","code":"<8 chars>"}'
 ```
 The far terminal is the config **authority**; `present_deed` re-derives everything from chain and
 checks: `code == deed_code` (`CodeMismatch`), **freshness** `slot - issued_slot <= deed_window_slots`
@@ -241,16 +243,17 @@ window turns latency into failure.
 ## Clause V — The Ledger Room (`room5.ts`) — traverse 7 paid, content-addressed nodes
 
 **Goal:** walk a 7-hop route where each node id is only learned from the previous node's response,
-avoiding two decoys. Team-scoped, uses the `pay` CLI on the estate's local rails.
+avoiding two decoys. Claim-scoped, uses the `pay` CLI on the estate's local rails.
 
 ### Setup
 ```sh
-curl "http://10.61.0.20:8700/clause/room5?claim=$CLAIM_NUMBER"   # -> teamName, startUrl
+curl "http://10.61.0.20:8700/clause/room5?claim=$CLAIM_NUMBER"   # -> startUrl
 pay setup                     # ephemeral wallet, pre-funded by the estate
-pay --local curl "http://10.61.0.20:8703/node/start?team=<team>"
+pay --local curl "http://10.61.0.20:8703/node/start?claim=<claim>"
 ```
 Every node is x402-gated: `200` SCRIP to the deployer ATA, `feePayer` = deployer. `pay --local`
-runs the whole 402 → pay → retry cycle. The `?team=` query is required on every request.
+runs the whole 402 → pay → retry cycle. The `?claim=` query is required on every request.
+Each claimant has an independent route and scoreboard entry.
 
 ### The traversal
 A hop response is:
@@ -271,7 +274,7 @@ Automate it — the intended solution is a small loop:
 ```
 id = "start"
 loop 7 times:
-  resp = pay --local curl "http://10.61.0.20:8703/node/<id>?team=<team>"
+  resp = pay --local curl "http://10.61.0.20:8703/node/<id>?claim=<claim>"
   if resp has flash_seconds: done (final node)
   id = resp.next            # NEVER resp.decoy_of_next
 ```
@@ -280,6 +283,7 @@ loop 7 times:
 The 7th node returns `{ hops_correct, flash_seconds, token }` with
 `hops_correct = 7 - decoysPaid - skipped` and `flash_seconds = clamp(3 + hops_correct, 3..10)`. A
 clean run = 7/7 → 10-second look at the vault. The `token` is filed to the scoreboard.
+Scoreboard lines are per claimant, for example: `CLAIMANT-04 — ROUTE 6/7 — MERCY 9s`.
 
 **Why AI-resistant:** the route is content-addressed (no guessable ids), and each decoy is a
 *plausible, purchasable* sibling — only the natural-language hint disambiguates it.
@@ -313,7 +317,7 @@ axes (the other is your on-camera pulse, which the estate scores theatrically, n
   the on-chain `deed_code` (room 4), the room-5 `token`. All derive from `SB_ESTATE_SECRET`.
 - **Diagnostics:** every room emits `*.rejected` / `fee-kept` / `decoy-paid` events on the
   executor feed with the exact mismatch (expected vs. observed amount, memo, destination). That is
-  the fastest way to tell a team *why* a submission bounced without explaining the puzzle.
+  the fastest way to tell a claimant *why* a submission bounced without explaining the puzzle.
 - **Reproduce any expected value** offline with the pure functions in `combos.ts`,
   `room1.ts::deriveRoom1Requirements`, `room2.ts::room2Nonces/room2HopBAmount`, and
-  `room5.ts::deriveRoom5Route`, given the claim/team and `SB_ESTATE_SECRET`.
+  `room5.ts::deriveRoom5Route`, given the claim and `SB_ESTATE_SECRET`.

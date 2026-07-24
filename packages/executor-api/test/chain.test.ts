@@ -22,17 +22,17 @@ describe("manual account decoders", () => {
   });
 
   test("decodes the variable-length Deed layout", () => {
-    const team = "TEAM-ROOK";
-    const bytes = Buffer.alloc(8 + 4 + team.length + 8 + 8 + 1, 0);
-    bytes.writeUInt32LE(team.length, 8);
-    bytes.write(team, 12, "utf8");
-    bytes.write("7Gk9QpZ2", 12 + team.length, "utf8");
-    bytes.writeBigUInt64LE(4_500n, 20 + team.length);
-    bytes[28 + team.length] = 1;
+    const claim = "CLAIMANT-04";
+    const bytes = Buffer.alloc(8 + 4 + claim.length + 8 + 8 + 1, 0);
+    bytes.writeUInt32LE(claim.length, 8);
+    bytes.write(claim, 12, "utf8");
+    bytes.write("7Gk9QpZ2", 12 + claim.length, "utf8");
+    bytes.writeBigUInt64LE(4_500n, 20 + claim.length);
+    bytes[28 + claim.length] = 1;
 
     expect(decodeDeed(bytes, "deed-pda")).toEqual({
       address: "deed-pda",
-      team,
+      claim,
       deedCode: "7Gk9QpZ2",
       issuedSlot: 4_500n,
       presented: true,

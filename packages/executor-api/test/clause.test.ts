@@ -74,4 +74,18 @@ describe("public clause disclosure", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "the estate is not yet in session" });
   });
+
+  test("room5 clause exposes a claimant start URL", async () => {
+    const { ctx } = fixture();
+    const claimant = Keypair.generate().publicKey.toBase58();
+    ctx.db.upsertClaimant("CLAIMANT-03", claimant, "18");
+    ctx.db.reveal("CLAIMANT-03", "room5");
+    const response = await createClauseApp(ctx).request("/clause/room5?claim=CLAIMANT-03");
+    expect(response.status).toBe(200);
+    const body = await response.json() as Record<string, unknown>;
+    expect(body).toEqual(expect.objectContaining({
+      startUrl: "http://10.61.0.20:8703/node/start?claim=CLAIMANT-03",
+    }));
+    expect(body).not.toHaveProperty("teamName");
+  });
 });

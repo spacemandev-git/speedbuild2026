@@ -13,7 +13,7 @@ afterEach(() => databases.splice(0).forEach((db) => db.close()));
 function fixture(): { ctx: AppContext; settle: Room5Settler; settlements: { count: number }; paymentHeader: string } {
   const db = new EstateDatabase(":memory:");
   databases.push(db);
-  db.sqlite.query("INSERT INTO teams(name, registrar_key) VALUES (?, ?)").run("TEAM ROOK", Keypair.generate().publicKey.toBase58());
+  db.upsertClaimant("CLAIMANT-07", Keypair.generate().publicKey.toBase58(), "17");
   const mint = Keypair.generate().publicKey;
   const deployer = Keypair.generate();
   const destination = getAssociatedTokenAddressSync(mint, deployer.publicKey).toBase58();
@@ -54,16 +54,16 @@ async function paid(app: ReturnType<typeof createRoom5App>, path: string, paymen
 
 describe("Room 5 ledger traversal", () => {
   test("derives stable content addresses", () => {
-    const route = deriveRoom5Route("estate-secret", "TEAM ROOK");
-    expect(route.nodes).toEqual(["n_cfda", "n_560e", "n_b6fd", "n_c48c", "n_8055", "n_7fd4", "n_20bf"]);
-    expect([...route.decoys]).toEqual([[3, "d_765a"], [6, "d_9fd7"]]);
+    const route = deriveRoom5Route("estate-secret", "CLAIMANT-07");
+    expect(route.nodes).toEqual(["n_d820", "n_475b", "n_5f11", "n_34f2", "n_268a", "n_fd9f", "n_1b1d"]);
+    expect([...route.decoys]).toEqual([[3, "d_048e"], [6, "d_1444"]]);
   });
 
   test("enforces order, accounts for a decoy, and replays without charging", async () => {
     const { ctx, settle, settlements, paymentHeader } = fixture();
     const app = createRoom5App(ctx, settle);
-    const route = deriveRoom5Route(ctx.config.estateSecret, "TEAM ROOK");
-    const query = "?team=TEAM%20ROOK";
+    const route = deriveRoom5Route(ctx.config.estateSecret, "CLAIMANT-07");
+    const query = "?claim=CLAIMANT-07";
 
     const challenge = await app.request(`/node/start${query}`);
     expect(challenge.status).toBe(402);
@@ -113,7 +113,7 @@ describe("Room 5 ledger traversal", () => {
     });
     expect(settlements.count).toBe(8);
     expect(await (await app.request("/scoreboard")).json()).toEqual([
-      expect.objectContaining({ team: "TEAM ROOK", hops_correct: 6, flash_seconds: 9 }),
+      expect.objectContaining({ claim: "CLAIMANT-07", hops_correct: 6, flash_seconds: 9 }),
     ]);
     expect(ctx.db.recentEvents(20).map((event) => event.type)).toContain("room5.decoy-paid");
     expect(ctx.db.recentEvents(20).map((event) => event.type)).toContain("room5.route-complete");

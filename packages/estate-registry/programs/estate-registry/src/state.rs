@@ -21,17 +21,17 @@ pub struct ClaimRecord {
 #[account]
 #[derive(InitSpace)]
 // LAYOUT-CRITICAL: registrar_key=8..40 and deeds_minted=40.
-pub struct TeamHoldings {
+pub struct ClaimHoldings {
     pub registrar_key: Pubkey,
     pub deeds_minted: u8,
 }
 
 #[account]
 #[derive(InitSpace)]
-// LAYOUT-CRITICAL: keep team first and preserve all field ordering.
+// LAYOUT-CRITICAL: keep claim first and preserve all field ordering.
 pub struct Deed {
     #[max_len(16)]
-    pub team: String,
+    pub claim: String,
     pub deed_code: [u8; 8],
     pub issued_slot: u64,
     pub presented: bool,

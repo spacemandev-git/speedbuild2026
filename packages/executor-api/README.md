@@ -19,17 +19,17 @@ defaults point at Surfpool on `127.0.0.1:8899` and `127.0.0.1:8900`.
 
 ## Room 5 — the Ledger Room
 
-Room 5 maintains a seven-hop route for every team in the database. Node and decoy identifiers
+Room 5 maintains a seven-hop route for every claimant in the database. Node and decoy identifiers
 are deterministic HMAC-derived content addresses, while traversal position, paid decoys,
 idempotent responses, and the completed score are persisted in `room_state`. The default decoy
 positions are 3 and 6; production may set a `room5` `config` value containing
-`{"decoyPositions":[...]}` for a team (or `*`).
+`{"decoyPositions":[...]}` for a claimant (or `*`).
 
 Every current node first returns an x402 v2 exact-SVM demand for 200 SCRIP. The Pay.sh client
 submits its partially signed transaction in `X-PAYMENT`; the in-process facilitator verifies,
 settles, and inspects it before the traversal advances. Replaying an already paid node returns
 the persisted response without settlement. Future and otherwise out-of-order nodes do not
-charge. `GET /scoreboard` is public and contains completed team runs.
+charge. `GET /scoreboard` is public and contains completed claimant runs.
 
 ## Bonus — the Stress Clause
 
@@ -70,8 +70,8 @@ been seeded returns the in-fiction 503 response instead of crashing process star
 - `room3.fail` — a reconstruction missed the committed key and incurred the Actuary's assessment.
 - `room3.exhausted` — the third failed reconstruction closed the round.
 - `room4.presented` — the registry accepted a fresh bearer deed.
-- `room5.decoy-paid` — a team paid a currently offered false ledger entry.
-- `room5.route-complete` — a team completed its route and received a mercy-flash score.
+- `room5.decoy-paid` — a claimant paid a currently offered false ledger entry.
+- `room5.route-complete` — a claimant completed its route and received a mercy-flash score.
 - `bonus.task-complete` — one chain-verified Stress Clause duty was first satisfied.
 - `bonus.progress` — persisted Stress Clause completion percentage changed.
 - `combo.reveal` — a successful clause released its physical unlock/deed information.

@@ -13,18 +13,18 @@ contract and must not move:
 | Account | Bytes after discriminator |
 | --- | --- |
 | `ClaimRecord` | executor `8..40`; status `40`; probate nonce `41..49` little-endian; tribute ATA `49..81` |
-| `TeamHoldings` | registrar key `8..40`; deeds minted `40` |
+| `ClaimHoldings` | registrar key `8..40`; deeds minted `40` |
 
-`ClaimRecord` and `TeamHoldings` intentionally contain no `String` fields. Claim numbers and team
-names are instruction arguments used as PDA seeds only. `Deed.team` is a Borsh string capped at 16
+`ClaimRecord` and `ClaimHoldings` intentionally contain no `String` fields. Claim numbers are
+instruction arguments used as PDA seeds only. `Deed.claim` is a Borsh string capped at 16
 UTF-8 bytes and remains the first deed field.
 
 The PDAs are:
 
 - config: `["config"]`
 - claim: `["claim", lowercase(claim_number)]`
-- team holdings: `["team", team_name]`
-- deed: `["deed", team_name]`
+- claim holdings: `["holdings", claim_number]`
+- deed: `["deed", claim_number]`
 
 ## Build and test
 

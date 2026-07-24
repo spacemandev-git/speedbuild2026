@@ -198,7 +198,7 @@ re-runnable, `set -euo pipefail`):
      `initialize(authority)`.
   4. `30-fund-and-seed.ts` — reads claimant registry from executor-api admin (or a JSON arg):
      per claimant `surfnet_setAccount` (SOL) + `surfnet_setTokenAccount` (SCRIP), create
-     tribute ATAs, `init_claim` per claimant, `init_team` per team.
+     tribute ATAs, `init_claim` per claimant, `init_claim_holdings` per claimant.
 - executor-api installed to `/opt/executor-api`, systemd `executor-api.service` (bun).
 
 ## 8. `estate_registry` Anchor program (`packages/estate-registry`)
@@ -210,25 +210,25 @@ Accounts (field order = exact byte layout after the 8-byte discriminator; briefs
 - `Config` — seeds `["config"]`: `{ authority: Pubkey, deed_window_slots: u64 }` (default 4500).
 - `ClaimRecord` — seeds `["claim", lowercase(claim_number)]`:
   `{ executor: Pubkey /*8..40*/, status: u8 /*40*/, probate_nonce: u64 /*41..49 LE*/, tribute_ata: Pubkey /*49..81*/ }`
-- `TeamHoldings` — seeds `["team", team_name]`:
+- `ClaimHoldings` — seeds `["holdings", claim_number]`:
   `{ registrar_key: Pubkey /*8..40*/, deeds_minted: u8 /*40*/ }`
-- `Deed` — seeds `["deed", team_name]`:
-  `{ team: String(≤16) , deed_code: [u8;8], issued_slot: u64, presented: bool }`
+- `Deed` — seeds `["deed", claim_number]`:
+  `{ claim: String(≤16) , deed_code: [u8;8], issued_slot: u64, presented: bool }`
 
 Instructions:
 - `initialize(deed_window_slots: u64)` — creates Config, authority = signer.
 - `init_claim(claim_number: String≤16, probate_nonce: u64)` — authority only; `tribute_ata`
   passed as account; status=0, executor=authority.
 - `mark_proven(claim_number: String)` — authority only; sets status=1.
-- `init_team(team_name: String≤16, registrar_key: Pubkey)` — authority only.
-- `mint_deed(team_name: String, memo_hash: [u8;32])` — permissionless. Requires:
+- `init_claim_holdings(claim_number: String≤16, registrar_key: Pubkey)` — authority only.
+- `mint_deed(claim_number: String, memo_hash: [u8;32])` — permissionless. Requires:
   (a) `remaining_accounts[0].key == holdings.registrar_key` else error `RegistrarMissing`;
   (b) via Instructions sysvar: same tx contains an SPL Memo (`MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`)
   instruction whose data == lowercase-hex(memo_hash) else `MemoMissing`;
   (c) existing deed must have `presented == false` (re-mint allowed) else `DeedAlreadyPresented`.
-  Sets `deed_code` = first 8 chars of base58(sha256(team_name ‖ memo_hash ‖ issued_slot_le)),
+  Sets `deed_code` = first 8 chars of base58(sha256(claim_number ‖ memo_hash ‖ issued_slot_le)),
   `issued_slot` = Clock::slot, `presented=false`.
-- `present_deed(team_name: String, code: String)` — authority only; checks code match
+- `present_deed(claim_number: String, code: String)` — authority only; checks code match
   (`CodeMismatch`), freshness `clock.slot - issued_slot <= config.deed_window_slots`
   (`DeedStale`), `presented == false` (`DeedAlreadyPresented`); sets presented=true.
 
@@ -242,7 +242,7 @@ One process, multiple listeners:
 | 8701 | Honest x402 facilitator (`/verify`, `/settle`, `/supported`) — `@x402/svm` + `@x402/core`, RPC → `http://127.0.0.1:8899` |
 | 8702 | FAC-A trap facilitator: settles for real, but flags the claimant's fragment as poisoned |
 | 8703 | Room 5 ledger nodes: `/node/start`, `/node/:id` — x402-v2 402 challenges payable by Pay.sh (`pay curl` with `--local`) |
-| 8710 | Admin (bearer `SB_ADMIN_TOKEN`): claimant/team CRUD, reveal, mercy, state dump, `GET /events` (SSE) |
+| 8710 | Admin (bearer `SB_ADMIN_TOKEN`): claimant CRUD, reveal, mercy, state dump, `GET /events` (SSE) |
 
 Core services:
 - **Combos**: `HMAC_SHA256(SB_ESTATE_SECRET, claim_number ‖ room_id)` → 4-digit (`mod 10000`),
@@ -256,7 +256,7 @@ Core services:
   claimants; share encryption `encShare = share XOR sha256(keyMaterial ‖ salt)`; group console:
   3 attempts, Lagrange reconstruct, hash == target.
 - **Room 4**: far-terminal endpoint — reads Deed PDA, calls `present_deed`.
-- **Room 5**: 7 content-addressed nodes, 2 decoys with hints, per-team traversal state, final
+- **Room 5**: 7 content-addressed nodes, 2 decoys with hints, per-claimant traversal state, final
   score → flash_seconds + signed token, scoreboard event.
 - **Bonus**: registry of micro-tasks with per-task verifiers, completion %.
 - All state in sqlite `/var/lib/executor/state.sqlite`; every consequential event also inserted
