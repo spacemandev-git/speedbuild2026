@@ -11,7 +11,7 @@ const ZONES = {
   },
   challenges: {
     ip: ZONE_IPS.challenges,
-    services: ["surfpool", "executor-api"],
+    services: ["surfpool", "bureau-api"],
     ports: [8899, 8900, 8700, 8701, 8702, 8703, 8710],
   },
   inference: {

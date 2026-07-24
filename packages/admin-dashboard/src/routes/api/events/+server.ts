@@ -1,4 +1,4 @@
-import { fetchExecutorEvents } from '$lib/server/upstream';
+import { fetchBureauEvents } from '$lib/server/upstream';
 import type { RequestHandler } from './$types';
 
 const encoder = new TextEncoder();
@@ -6,14 +6,14 @@ const encoder = new TextEncoder();
 export const GET: RequestHandler = async ({ request }) => {
   let upstream: Response;
   try {
-    upstream = await fetchExecutorEvents(request.signal);
+    upstream = await fetchBureauEvents(request.signal);
   } catch (error) {
-    return new Response(error instanceof Error ? error.message : 'Executor event stream unavailable', { status: 502 });
+    return new Response(error instanceof Error ? error.message : 'Bureau event stream unavailable', { status: 502 });
   }
 
   if (!upstream.ok || !upstream.body) {
     const detail = await upstream.text();
-    return new Response(detail || 'Executor event stream unavailable', { status: 502 });
+    return new Response(detail || 'Bureau event stream unavailable', { status: 502 });
   }
 
   const reader = upstream.body.getReader();

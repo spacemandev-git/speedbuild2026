@@ -1,6 +1,6 @@
 # sb-host-agent
 
-`sb-host-agent` is the host-side provisioning service for Speedbuild. It runs under Bun on the Ubuntu host, stores participant identity state atomically, and invokes Incus exclusively through argv-based `Bun.spawn` calls.
+`sb-host-agent` is the host-side provisioning service for Speed Build 2026 and the Bureau game environment. It runs under Bun on the Ubuntu host, stores participant and operative identity state atomically, and invokes Incus exclusively through argv-based `Bun.spawn` calls.
 
 The service listens on `10.61.0.1:7000`. On development machines where that bridge address is unavailable, it logs a warning and falls back to `0.0.0.0:7000`. Every endpoint requires `Authorization: Bearer $SB_HOST_AGENT_TOKEN`, including `/health`.
 
@@ -13,13 +13,18 @@ The service listens on `10.61.0.1:7000`. On development machines where that brid
 | `POST` | `/participants` | `{ "name"?: "p01", "authorizedKey"?: "ssh-ed25519 ..." }` | Provision the requested or next free participant |
 | `GET` | `/participants` | — | List state merged with live Incus status |
 | `GET` | `/participants/:name` | — | Get one participant and live status |
-| `POST` | `/participants/:name/reveal` | `{ "room": "room1" }` | Push room content and notify executor-api |
+| `GET` | `/recordings/archive` | — | Download all available recordings as `bureau-recordings.tar` |
+| `GET` | `/participants/:name/recordings` | — | List one participant's recordings |
+| `GET` | `/participants/:name/recordings/archive` | — | Download one participant's recordings |
+| `POST` | `/participants/:name/reveal` | `{ "room": "room1" }` | Push room content and notify bureau-api |
 | `POST` | `/participants/:name/suspend` | — | Stop the participant container |
 | `POST` | `/participants/:name/resume` | — | Start the participant container |
 | `POST` | `/participants/:name/reset` | — | Rebuild while preserving identity and reveals |
 | `DELETE` | `/participants/:name` | — | Delete the container and release its API key |
 
 Errors are JSON objects shaped as `{ "error": "...", "detail"?: "..." }`.
+
+Provisioning assigns an `OPERATIVE-NN` id and configures the `operative` Unix user. Runtime values are written to `/home/operative/.bureau-env` as `BUREAU_API_KEY`, `OPERATIVE_ID`, `SOLANA_KEYPAIR`, and, when configured, `SUNBURST_OR_KEY`.
 
 ## Examples
 

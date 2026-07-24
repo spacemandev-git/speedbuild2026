@@ -1,238 +1,198 @@
-# Players Guide — The Estate
+# Players Guide — Speed Build 2026
 
-*A practical, out-of-fiction companion for claimants. The clause briefs speak in the
-will's voice; this document tells you plainly what your machine is, what it can do, and how
-to use it well under a nine-hour clock.*
+This practical guide explains your participant box, identity, wallet, challenge briefs, tools, and
+recovery options for the event.
 
-Everything you build tonight runs against a **private Solana test network** with a token the
-estate mints and pre-funds for you (`SCRIP`). Nothing touches mainnet, and nothing you can do
-costs real money. The protocols are real; the stakes are theatrical.
-
----
+Everything you build runs against Solana devnet with a pre-funded custom token (`CRED`). Nothing
+touches mainnet, and nothing you do costs real money. The protocols and transactions are real; the
+assets have no real-world value.
 
 ## 1. What you are given
 
 At check-in you receive:
 
-- A **claim number** (e.g. `CLAIMANT-07`) — your identity for the whole show.
-- **SSH access** to your own isolated Linux box (a container on the estate's server), reachable
-  over the venue network on a port assigned to you.
-- A **password** (and, if you sent one ahead, your SSH public key is already installed).
+- An operative ID, such as `OPERATIVE-07`, used for the whole event.
+- SSH access to an isolated Linux box, reachable over the venue network on an assigned port.
+- A password. If you supplied an SSH public key in advance, it is already installed.
 
-Your box comes with a pre-funded wallet, a full Solana / x402 / Pay.sh toolchain, and a local AI
-coding assistant. You do **not** install anything to get started — it is all baked in.
+Your box includes a pre-funded wallet, the complete Solana/x402/Pay.sh toolchain, and a local AI
+coding assistant. No installation is required to start.
 
 ### Connecting
 
 ```sh
-ssh claimant@<estate-host> -p <your-port>
+ssh operative@<host> -p <port>
 ```
 
-The floor marshals will give you `<estate-host>` (the server's venue IP or hostname) and
-`<your-port>`. Every claimant logs in as the same Unix user, `claimant` — your *isolation* is that
-you each have your own box, not your own username.
+Floor marshals provide `<host>` and `<port>`. Every participant logs in as the Unix user
+`operative`; isolation comes from each participant having a separate box.
 
-> **Recording notice.** Your interactive terminal is recorded (and may be streamed to the broadcast
-> wall) for the duration of the show. File transfers (`scp`/`sftp`) and one-off remote commands
-> (`ssh claimant@host -p PORT 'somecmd'`) are **not** recorded. This is expected and part of the
-> production; it does not read your local machine, only what happens inside your estate box.
-
----
+> **Recording notice.** Your interactive terminal is recorded and may be streamed to the event
+> wall. File transfers (`scp`/`sftp`) and one-off remote commands such as
+> `ssh operative@host -p PORT 'somecmd'` are not recorded. Recording covers only activity inside
+> the participant box; it does not read your local computer.
 
 ## 2. Your identity and wallet
 
-Two environment variables define who you are. They are set for you at login:
+Two environment variables are set at login:
 
 | Variable | What it is |
 |---|---|
-| `CLAIM_NUMBER` | Your claim number. Nearly every clause endpoint and unlock code is keyed to it. |
-| `ESTATE_API_KEY` | Your personal key for the estate's AI inference service (already wired into OpenCode). |
+| `OPERATIVE_ID` | Your event identity. Challenge endpoints and result values are keyed to it. |
+| `BUREAU_API_KEY` | Your personal key for the Bureau AI inference service, already configured in OpenCode. |
 
-Check them any time:
+They are stored in `~/.bureau-env` and loaded into the login environment.
 
-```sh
-echo "$CLAIM_NUMBER"
-```
-
-Your Solana wallet is at `~/.config/solana/id.json`, already funded with test SOL (for fees) and
-`SCRIP` (the estate's currency, used for every tribute, fee, and payment). The Solana CLI is
-pre-pointed at the estate's network — you do not configure an RPC:
+Check your ID at any time:
 
 ```sh
-solana address                 # your public key
-solana balance                 # your SOL
-spl-token accounts             # your SCRIP balance (and any other token accounts)
-solana config get              # shows the RPC/WS the estate has set for you
+echo "$OPERATIVE_ID"
 ```
 
-Every verifier binds to *your* public key. A tribute or payment only counts when it comes from your
-wallet — you cannot pay on someone else's behalf, and no one can pay on yours.
+Your Solana wallet is at `~/.config/solana/id.json`, already funded with test SOL for fees and
+`CRED` for challenge payments. The Solana CLI is preconfigured for the event RPC:
 
----
-
-## 3. Your workspace and the clause briefs
-
-Your home directory has an `~/estate/` folder:
-
+```sh
+solana address
+solana balance
+spl-token accounts
+solana config get
 ```
-~/estate/
-  README.md            # orientation
-  rooms/               # each room's brief appears here WHEN it is revealed to you
-    room1/CLAUSE.md
-    room2/CLAUSE.md
+
+Every verifier binds to your public key. A transfer or payment counts only when it comes from your
+wallet.
+
+## 3. Your workspace and challenge briefs
+
+Your home directory contains:
+
+```text
+~/bureau/
+  README.md
+  rooms/
+    room1/BRIEF.md
+    room2/BRIEF.md
     ...
 ```
 
-**A room's brief only exists after the estate reveals it to you.** When a room opens, its
-`CLAUSE.md` appears under `~/estate/rooms/<room>/`. Read it first, every time.
+A room's `BRIEF.md` appears in `~/bureau/rooms/<room>/` only after that room is revealed to you.
+Read it first each time.
 
-### Live parameters — the clause endpoint
+### Live parameters
 
-The briefs deliberately contain **no** deployment-specific values (program IDs, token mints, exact
-endpoints, your personal nonce). Those are served live, keyed to your claim number:
+Briefs omit deployment-specific values such as program IDs, token mints, exact endpoints, and
+personal nonces. Pull the live values for your operative ID:
 
 ```sh
-curl "http://10.61.0.20:8700/clause/room1?claim=$CLAIM_NUMBER" | jq
+curl "http://10.61.0.20:8700/brief/room1?operative=$OPERATIVE_ID" | jq
 ```
 
-This returns JSON with exactly what that room needs from you — the registry program, the RPC, the
-`SCRIP` mint, and any per-claimant parameters. It returns `404` while a room is still sealed. **The
-estate never publishes schemas.** You decode account layouts and wire formats from the byte hints in
-the brief. That is the puzzle, by design.
-
----
+The endpoint returns `404` until the room is revealed. Challenge schemas are intentionally not
+published; decode account layouts and wire formats from the byte hints in `BRIEF.md`.
 
 ## 4. The toolchain on your box
 
-Everything you need is on `PATH`:
+Everything required is on `PATH`:
 
-| Tool | For |
+| Tool | Use |
 |---|---|
-| `solana`, `spl-token` | Solana CLI + SPL token operations (pre-pointed at the estate RPC) |
-| `anchor`, `cargo`, `rustc` | Build/deploy Anchor programs; Rust |
-| `bun`, `node`, `npm` | Run TypeScript/JavaScript; `@solana/kit` / `web3.js` scripting |
-| `pay` | The Pay.sh CLI (auto-pays 402-gated APIs from a sandbox wallet) — used in the Ledger Room |
-| `jq` | Slice JSON responses (you will use this constantly) |
-| `tmux` | Keep multiple panes / survive a flaky SSH connection |
-| `git`, `vim`, `nano` | The usual |
-| `opencode` | Your local AI coding assistant (next section) |
+| `solana`, `spl-token` | Solana CLI and SPL token operations, preconfigured for the event RPC |
+| `anchor`, `cargo`, `rustc` | Anchor and Rust development |
+| `bun`, `node`, `npm` | TS/JS and `@solana/kit`/`web3.js` programs |
+| `pay` | Pay.sh CLI for x402-gated calls in Room 5 — Memory Path |
+| `jq` | Parse and select JSON response data |
+| `tmux` | Keep multiple panes and survive a dropped SSH connection |
+| `git`, `vim`, `nano` | Standard development tools |
+| `opencode` | Local AI coding assistant |
 
-Recommended: **start every session in `tmux`** so a dropped connection doesn't kill a running
-build or your assistant. Reconnect with `tmux attach`.
+Start each session in `tmux` so a dropped connection does not terminate a build or assistant.
+Reconnect with `tmux attach`.
 
----
+## 5. The AI assistant
 
-## 5. The AI assistant (OpenCode)
-
-Your box ships with **OpenCode**, wired to the estate's own inference server. Start it from your
-workspace:
+OpenCode is configured for the Bureau inference service. Start it from your workspace:
 
 ```sh
-cd ~/estate
+cd ~/bureau
 opencode
 ```
 
-It is preconfigured — no login, no API key to paste. It talks to the estate model over your
-`ESTATE_API_KEY`, and it has a Solana MCP tool available for chain lookups.
+No login or pasted key is required. It uses `BUREAU_API_KEY` and includes a Solana MCP tool for
+chain lookups.
 
-### Use it well — and know its limits
+The challenges are designed around facts an assistant cannot infer: unlabeled byte layouts,
+required memos omitted by convenience clients, state carried from one step to the next, and
+trust/decoy decisions. Use the assistant as a fast implementation and debugging partner, not as
+an answer source.
 
-The challenges are **specifically designed to resist being one-shotted by an AI**. An assistant that
-you point at a clause and ask "solve this" will confidently produce plausible, *wrong* code — because
-the puzzles hinge on things the model cannot guess: unlabeled byte layouts, a memo the standard SDK
-omits, a nonce carried from the previous step, which of two brokers is honest. Treat the assistant as
-a fast pair of hands, not an oracle.
+It is useful for:
 
-What it is genuinely good for:
+- Generating focused boilerplate, such as reading an account and printing raw bytes.
+- Decoding data after you provide the exact offset table and bytes.
+- Explaining the x402 402→pay→retry cycle, SPL Memo instructions, or `pay curl`.
+- Debugging when you provide the error, source, and live parameters.
 
-- **Boilerplate and mechanics** — "write a Bun script using `@solana/kit` that reads account
-  `<pubkey>` and prints the raw bytes as hex."
-- **Decoding help once you supply the layout** — paste the byte-offset table from the brief and the
-  raw account bytes, and ask it to decode a little-endian u64 at a given offset.
-- **Explaining tools you don't know** — the x402 402→pay→retry cycle, how to construct an SPL Memo
-  instruction, what `pay curl` does.
-- **Debugging** — paste the error, paste your code, ask what's wrong.
+Be careful when it:
 
-Where it will lead you astray if you're not careful:
+- Uses a standard transfer recipe that omits the required SPL Memo instruction.
+- Assumes an IDL or schema exists.
+- Invents program IDs, amounts, or other live values instead of using the brief endpoint.
 
-- It will happily use the *standard* "send tokens" recipe that **omits the memo** a room requires.
-- It will assume a schema/IDL exists when the whole point is that none is published.
-- It doesn't know your live parameters — feed it the clause-endpoint JSON; don't let it invent
-  program IDs or amounts.
-
-**Performance:** the model is shared across every claimant on one CPU server. Under load it generates
-a few tokens per second, and it can be bursty. Keep prompts tight, ask for one thing at a time, and
-don't lean on it for long free-form essays — you're on a clock, and so is everyone else on the same
-box.
-
----
+The model is shared across all participants on one CPU server. Under load it can generate only a
+few tokens per second and may be bursty. Keep prompts focused and request one concrete task at a
+time.
 
 ## 6. How to approach each room
 
-The rooms exercise different primitives; the shared discipline is: **read the brief, pull live
-params from the clause endpoint, decode from bytes, chain each step's output into the next, and never
-hardcode.** Concretely:
+Across every room: read `BRIEF.md`, pull live parameters from `/brief`, decode from bytes, feed
+each step's output into the next, and never hardcode.
 
-- **Solana decode-and-prove rooms (Reading Room, Burned Wing).** Derive the PDA with the *exact*
-  seeds (watch case-sensitivity — claim numbers are lowercased in seeds). Fetch the account, decode
-  it byte-by-byte from the offset table. The classic time sinks are **endianness** (a `u64` is
-  little-endian) and **hashing raw bytes vs. the hex string** — get those right. Where a room wants a
-  "tribute" or a `mint_deed`, the transaction must carry the **SPL Memo instruction in the same
-  transaction** as the transfer/instruction. The standard SDK path usually leaves it out.
+- **Room 1 — Operation.** Derive the verification-record PDA with the exact seeds and lowercase
+  only the operative ID used in the `"claim"` seed. Decode the account from the offset table.
+  Treat `u64` values as little-endian and hash raw nonce bytes, not the nonce's hex representation. The
+  exact `CRED` transfer and required SPL Memo must be in the same transaction.
 
-- **x402 payment rooms (Vault Wing, Séance Room).** The naive move — pointing `x402-fetch`/`x402-axios`
-  at the URL — pays but omits the required memo, and the estate will *keep your fee and give you
-  nothing*. Read the **response body**, not just the status code: a `200` can still say `SEALED`. To
-  actually unseal, you hand-build the `X-PAYMENT` payload: construct the transfer *plus* the memo the
-  `402` demanded, sign it, base64 the envelope yourself. Later hops compute their amount from a nonce
-  carried in the previous response — never assume a fixed price.
+- **Room 2 — Assembly.** A convenience x402 client can pay while omitting the required memo.
+  Read the response body: HTTP `200` may still report `SEALED`. Hand-build the `X-PAYMENT`
+  envelope containing the transfer and memo, sign and base64-encode it, then carry the returned
+  nonce into the second hop and compute that hop's amount rather than assuming a fixed price.
 
-- **The Séance Room's trust decision.** Two payment brokers are offered; one is flagged
-  "integrity unverified." Paying through the compromised broker returns a fragment that *passes your
-  local checksum but is poison*. **Self-settle** — build and submit the payment yourself, present the
-  settled signature — to get the real share. There is no way for the assistant to tell you which
-  broker is honest; read the flag and decide.
+- **Room 3 — Trust.** FAC-A is marked `integrity unverified`; a payment through it returns a
+  checksum-valid poison fragment. Self-settle by building and submitting the payment yourself,
+  then present the settled signature. Decrypt the response with SHA-256 counter-mode XOR and
+  verify its CRC before submitting it for reconstruction.
 
-- **The Ledger Room (Pay.sh).** Run `pay setup` (an ephemeral sandbox wallet — nothing to fund),
-  then `pay whoami`. The route is seven **content-addressed** nodes: you only learn the next node id
-  from the current response, so you must actually traverse — there is no `/node/3`. Two positions
-  carry a **decoy**; the `hint` field disambiguates. The natural solution is a small loop script
-  (`pay curl` → parse `next` → apply the hint → follow the chain). A cleaner run earns a longer
-  reveal.
+- **Room 4 — Minesweeper.** This is per-operative. Decode `registrar_key` from the
+  `OperativeHoldings` PDA.
+  The `mint_code` transaction needs both that pubkey as the first remaining account and the
+  lowercase-hex memo in the same transaction. The stored `issued_slot` is little-endian, the code
+  has an expiry window, and the presentation endpoint is one-shot.
 
-- **The Stress Clause (bonus).** Small independent self-verifying tasks (a transfer, a paid call, a
-  decode). Partial credit counts. It's the accessible round — bank what you can.
-
----
+- **Room 5 — Memory Path.** Run `pay setup`, then `pay whoami`. The seven-node route is
+  content-addressed: only the current response reveals the next ID, so `/node/3` does not exist.
+  Include `?operative=` on every request. Write a small loop around `pay curl`, parse `next`, and
+  follow it. Decoys occur at positions `{3,6}`; use the hint and follow the real `n_` node rather
+  than the purchasable `d_` decoy.
 
 ## 7. Getting unstuck
 
-You are never meant to be permanently stuck, and asking for help is a real (sometimes costly)
-in-game choice:
-
-1. **Timed hints (codicils).** Each clause reveals more mechanical detail on a schedule — byte
-   layouts, a worked formula with dummy values, skeleton code. They arrive on the clause page / the
-   executor feed. They never hand you the answer, but they close the gap.
-2. **The Executor's Mercy.** If you're truly blocked, a floor marshal can release your correct
-   combination/deed from the ops console — but it is **priced against the burning pot and announced
-   on screen**. Mercy is real and mercy is expensive; spend it deliberately.
-3. **Team rooms degrade gracefully.** The group rooms (Séance, Ledger) resolve to a lower-tier
-   outcome rather than halting the whole team on one stuck laptop.
-
----
+1. **Timed hints.** Each brief releases more mechanical detail on a schedule: byte layouts,
+   worked formulas with dummy values, and skeleton code. Hints narrow the problem without giving
+   you the final answer.
+2. **Manual override.** If you are blocked, a marshal can release your correct code from the
+   console. It is priced against the prize clock and announced.
+3. **Participants remain independent.** One blocked laptop does not stop anyone else's progress
+   or result. Every operative can continue and receive an individual output.
 
 ## 8. Practical tips
 
-- **Keep a scratch notes file** (`~/estate/notes.md`). You will carry values between steps
-  (nonces, decoded pubkeys, deed codes) — write them down as you decode them.
-- **Never hardcode.** Every value comes from the clause endpoint or a decoded account, and it is
-  unique to you. A copied number from a neighbour or a hint's dummy value will silently fail.
-- **Verify your reads before you pay.** Print the raw account bytes and confirm your decode against
-  the offset table *before* spending a tribute — the estate does not explain rejected payments.
-- **Reconnect-proof your work** with `tmux`. A nine-hour show on venue Wi-Fi will drop a connection.
-- **Watch the response body.** Across every payment room, the failure mode is a `200`/settled
-  payment that still didn't satisfy the clause. Read what the estate actually said.
-- **Ask the assistant for tools, decide the strategy yourself.** The decisions — which broker, which
-  node, whether the memo is present — are the parts it cannot do for you.
-
-Good luck. Satisfy the executors.
+- Keep a scratch file such as `~/bureau/notes.md` for nonces, decoded pubkeys, codes, and other
+  values carried between steps.
+- Never hardcode. Live values come from the brief endpoint or decoded chain state and are unique
+  to your operative ID.
+- Print raw account bytes and validate your decode against the offset table before making a
+  payment.
+- Use `tmux` so a venue-network drop does not terminate your work.
+- Read response bodies. A settled payment and HTTP `200` can still mean the challenge condition
+  was not satisfied.
+- Ask the assistant for implementation help; make the trust, memo, and decoy decisions yourself.

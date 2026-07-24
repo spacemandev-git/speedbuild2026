@@ -4,7 +4,7 @@ export const ZONE_IPS = {
   inference: "10.61.0.30",
 } as const;
 
-export const EXECUTOR_ADMIN_BASE = "http://10.61.0.20:8710";
+export const BUREAU_ADMIN_BASE = "http://10.61.0.20:8710";
 export const ASCIINEMA_BASE = "http://10.61.0.10:4000";
 export const HOST_AGENT_HOST = "10.61.0.1";
 export const HOST_AGENT_PORT = 7000;
@@ -69,7 +69,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     contentDir: env.CONTENT_DIR?.trim() || "/opt/speedbuild/challenges-content",
     hostLanHint: env.SB_HOST_LAN_HINT?.trim() || "<host-lan-ip>",
     // Shared OpenRouter key for the GLM 5.2 backup inference path. Optional:
-    // when unset, participants fall back to the local Estate provider only.
+    // when unset, participants fall back to the local Bureau provider only.
     sunburstOrKey: env.SUNBURST_OR_KEY?.trim() || undefined,
   };
 }

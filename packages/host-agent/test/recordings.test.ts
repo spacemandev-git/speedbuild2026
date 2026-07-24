@@ -24,12 +24,12 @@ function mockIncus(output: string): {
 describe("session recordings", () => {
   test("lists recordings from tab-separated find output", async () => {
     const { incus, execCalls } = mockIncus(
-      "claimant-20260718-120000-101.cast\t123\nclaimant-20260718-120100-102.cast\t456",
+      "operative-20260718-120000-101.cast\t123\noperative-20260718-120100-102.cast\t456",
     );
 
     expect(await listRecordings(incus, "p01")).toEqual([
-      { file: "claimant-20260718-120000-101.cast", size: 123 },
-      { file: "claimant-20260718-120100-102.cast", size: 456 },
+      { file: "operative-20260718-120000-101.cast", size: 123 },
+      { file: "operative-20260718-120100-102.cast", size: 456 },
     ]);
     expect(execCalls).toEqual([{
       container: "p01",

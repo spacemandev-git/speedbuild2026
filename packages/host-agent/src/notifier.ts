@@ -1,14 +1,14 @@
-export interface ExecutorEvent {
+export interface BureauEvent {
   id: number;
   type: string;
   room: string | null;
-  claimNumber: string | null;
+  operativeId: string | null;
   message: string;
   data: Record<string, unknown>;
 }
 
 export interface NotifyTarget {
-  claimNumber: string;
+  operativeId: string;
   text: string;
 }
 
@@ -17,37 +17,27 @@ export interface NotifierDeps {
   stateUrl: string;
   adminToken: string;
   incusExec: (container: string, argv: string[], opts: { input: string }) => Promise<unknown>;
-  loadParticipants: () => Promise<Record<string, { claimNumber: string }>>;
+  loadParticipants: () => Promise<Record<string, { operativeId: string }>>;
   readCursor: () => Promise<number | null>;
   writeCursor: (id: number) => Promise<void>;
   fetchImpl?: typeof fetch;
   log?: (entry: Record<string, unknown>) => void;
 }
 
-interface RoomStateRow {
-  claimNumber: string;
-  room: string;
-  key: string;
-  value: unknown;
-}
-
 const ROOM_LABELS: Record<string, string> = {
-  room1: "CLAUSE I · Provenance",
-  room2: "CLAUSE II · The Vault Wing",
-  room3: "CLAUSE III · The Residual",
-  room4: "CLAUSE IV · The Deed",
-  room5: "CLAUSE V · The Route",
-  bonus: "Bonus Duties",
+  room1: "Room 1 — Operation",
+  room2: "Room 2 — Assembly",
+  room3: "Room 3 — Trust",
+  room4: "Room 4 — Minesweeper",
+  room5: "Room 5 — Memory Path",
 };
 
-const TEAM_KEYS = new Set(["team", "teamName", "team_name", "claimant_team"]);
-
 const DELIVERY_SCRIPT = `set -u
-inbox="/home/claimant/estate/inbox.md"
-mkdir -p /home/claimant/estate
+inbox="/home/operative/bureau/inbox.md"
+mkdir -p /home/operative/bureau
 msg="$(cat)"
 printf '\n%s\n' "$msg" >> "$inbox"
-chown -R claimant:claimant /home/claimant/estate 2>/dev/null || true
+chown -R operative:operative /home/operative/bureau 2>/dev/null || true
 printf '%s\n' "$msg" | wall -n 2>/dev/null || printf '%s\n' "$msg" | wall 2>/dev/null || true`;
 
 export function formatNotice(opts: {
@@ -57,9 +47,9 @@ export function formatNotice(opts: {
   unlockLabel?: string;
   unlock?: string;
 }): string {
-  const roomLabel = opts.room === null ? "Estate" : (ROOM_LABELS[opts.room] ?? "Estate");
+  const roomLabel = opts.room === null ? "Bureau" : (ROOM_LABELS[opts.room] ?? "Bureau");
   const lines = [
-    "═══ ESTATE NOTICE ═══",
+    "=== BUREAU NOTIFICATION ===",
     `${roomLabel} — ${opts.headline}`,
     opts.message,
   ];
@@ -68,10 +58,10 @@ export function formatNotice(opts: {
 }
 
 function noticeTarget(
-  claimNumber: string,
+  operativeId: string,
   opts: Parameters<typeof formatNotice>[0],
 ): NotifyTarget {
-  return { claimNumber, text: formatNotice(opts) };
+  return { operativeId, text: formatNotice(opts) };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -80,27 +70,52 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-export function resolveDirectTargets(event: ExecutorEvent): NotifyTarget[] {
+export function resolveDirectTargets(event: BureauEvent): NotifyTarget[] {
   if (
     event.type === "combo.reveal"
     && (event.room === "room1" || event.room === "room2")
-    && typeof event.claimNumber === "string"
+    && typeof event.operativeId === "string"
   ) {
-    return [noticeTarget(event.claimNumber, {
+    return [noticeTarget(event.operativeId, {
       room: event.room,
-      headline: "SATISFIED",
+      headline: "ROOM VERIFIED",
       message: event.message,
       unlockLabel: "Combination",
       unlock: String(event.data.combo),
     })];
   }
 
+  if (
+    event.type === "combo.reveal"
+    && event.room === "room4"
+    && typeof event.data.operative === "string"
+  ) {
+    return [noticeTarget(event.data.operative, {
+      room: "room4",
+      headline: "ROOM VERIFIED",
+      message: event.message,
+      unlockLabel: "Clearance code",
+      unlock: String(event.data.clearanceCode),
+    })];
+  }
+
+  if (
+    event.type === "room5.route-complete"
+    && typeof event.data.operative === "string"
+  ) {
+    return [noticeTarget(event.data.operative, {
+      room: "room5",
+      headline: "ROUTE COMPLETE",
+      message: event.message,
+    })];
+  }
+
   if (event.type === "combo.reveal" && event.room === "room3" && isPlainObject(event.data.unlocks)) {
-    return Object.entries(event.data.unlocks).flatMap(([claimNumber, fragment]) => {
+    return Object.entries(event.data.unlocks).flatMap(([operativeId, fragment]) => {
       if (typeof fragment !== "string") return [];
-      return [noticeTarget(claimNumber, {
+      return [noticeTarget(operativeId, {
         room: "room3",
-        headline: "SATISFIED",
+        headline: "ROOM VERIFIED",
         message: event.message,
         unlockLabel: "Fragment",
         unlock: fragment,
@@ -108,7 +123,7 @@ export function resolveDirectTargets(event: ExecutorEvent): NotifyTarget[] {
     });
   }
 
-  if (event.type === "mercy.granted" && typeof event.claimNumber === "string") {
+  if (event.type === "override.granted" && typeof event.operativeId === "string") {
     const combo = typeof event.data.combo === "string" ? event.data.combo : undefined;
     const fragment = combo === undefined && typeof event.data.fragment === "string"
       ? event.data.fragment
@@ -116,93 +131,24 @@ export function resolveDirectTargets(event: ExecutorEvent): NotifyTarget[] {
     const unlock = combo ?? fragment;
     const opts: Parameters<typeof formatNotice>[0] = {
       room: event.room,
-      headline: "MERCY GRANTED",
+      headline: "MANUAL OVERRIDE",
       message: event.message,
     };
     if (unlock !== undefined) {
       opts.unlock = unlock;
       opts.unlockLabel = combo !== undefined ? "Combination" : "Fragment";
     }
-    return [noticeTarget(event.claimNumber, opts)];
-  }
-
-  if (event.type === "bonus.task-complete" && typeof event.claimNumber === "string") {
-    return [noticeTarget(event.claimNumber, {
-      room: event.room,
-      headline: "DUTY RECORDED",
-      message: event.message,
-    })];
+    return [noticeTarget(event.operativeId, opts)];
   }
 
   return [];
-}
-
-function teamNameFromValue(value: unknown): string | null {
-  if (typeof value === "string") {
-    try {
-      const parsed: unknown = JSON.parse(value);
-      if (parsed !== value) return teamNameFromValue(parsed);
-    } catch {
-      // State values may already be decoded strings.
-    }
-    return value;
-  }
-  if (!isPlainObject(value)) return null;
-  for (const key of ["team", "teamName", "team_name"] as const) {
-    if (typeof value[key] === "string") return value[key];
-  }
-  return null;
-}
-
-export async function resolveTeamTargets(
-  event: ExecutorEvent,
-  fetchState: () => Promise<RoomStateRow[]>,
-): Promise<NotifyTarget[]> {
-  let team: string;
-  let notice: Parameters<typeof formatNotice>[0];
-
-  if (
-    event.type === "combo.reveal"
-    && event.room === "room4"
-    && typeof event.data.team === "string"
-  ) {
-    team = event.data.team;
-    notice = {
-      room: "room4",
-      headline: "SATISFIED",
-      message: event.message,
-      unlockLabel: "Deed code",
-      unlock: String(event.data.deedCode),
-    };
-  } else if (
-    event.type === "room5.route-complete"
-    && typeof event.data.team === "string"
-  ) {
-    team = event.data.team;
-    notice = {
-      room: "room5",
-      headline: "ROUTE RECONSTRUCTED",
-      message: event.message,
-    };
-  } else {
-    return [];
-  }
-
-  const members = new Set<string>();
-  for (const row of await fetchState()) {
-    if (TEAM_KEYS.has(row.key) && teamNameFromValue(row.value) === team) {
-      members.add(row.claimNumber);
-    }
-  }
-  const text = formatNotice(notice);
-  return [...members].map((claimNumber) => ({ claimNumber, text }));
 }
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-function validEvent(value: unknown, frameId: number | null): ExecutorEvent | null {
+function validEvent(value: unknown, frameId: number | null): BureauEvent | null {
   if (!isPlainObject(value)) return null;
   const id = typeof value.id === "number" ? value.id : frameId;
   if (
@@ -210,7 +156,7 @@ function validEvent(value: unknown, frameId: number | null): ExecutorEvent | nul
     || !Number.isFinite(id)
     || typeof value.type !== "string"
     || (value.room !== null && typeof value.room !== "string")
-    || (value.claimNumber !== null && typeof value.claimNumber !== "string")
+    || (value.operativeId !== null && typeof value.operativeId !== "string")
     || typeof value.message !== "string"
     || !isPlainObject(value.data)
   ) return null;
@@ -218,13 +164,13 @@ function validEvent(value: unknown, frameId: number | null): ExecutorEvent | nul
     id,
     type: value.type,
     room: value.room,
-    claimNumber: value.claimNumber,
+    operativeId: value.operativeId,
     message: value.message,
     data: value.data,
   };
 }
 
-export class EstateNotifier {
+export class BureauNotifier {
   private readonly fetcher: typeof fetch;
   private readonly log: (entry: Record<string, unknown>) => void;
   private cursor: number | null = null;
@@ -260,35 +206,26 @@ export class EstateNotifier {
     this.abortController?.abort();
   }
 
-  async handleEvent(event: ExecutorEvent): Promise<void> {
+  async handleEvent(event: BureauEvent): Promise<void> {
     await this.initializeCursor(false);
     if (this.cursor !== null && event.id <= this.cursor) return;
 
-    let targets = resolveDirectTargets(event);
-    if (targets.length === 0) {
-      targets = await resolveTeamTargets(event, () => this.fetchState());
-      const team = typeof event.data.team === "string" ? event.data.team : null;
-      const isTeamEvent = (event.type === "combo.reveal" && event.room === "room4")
-        || event.type === "room5.route-complete";
-      if (isTeamEvent && team !== null && targets.length === 0) {
-        this.log({ component: "notify", skip: "no-team-members", team, eventId: event.id });
-      }
-    }
+    const targets = resolveDirectTargets(event);
 
     if (targets.length > 0) {
       const participants = await this.deps.loadParticipants();
       for (const target of targets) {
         const container = Object.entries(participants).find(([, participant]) => {
-          return participant.claimNumber === target.claimNumber;
+          return participant.operativeId === target.operativeId;
         })?.[0];
         if (!container) {
-          this.log({ component: "notify", skip: "unknown-claim", claimNumber: target.claimNumber });
+          this.log({ component: "notify", skip: "unknown-operative", operativeId: target.operativeId });
           continue;
         }
         try {
           await this.deps.incusExec(container, ["bash", "-c", DELIVERY_SCRIPT], { input: target.text });
         } catch (error) {
-          this.log({ component: "notify", error, container, claimNumber: target.claimNumber });
+          this.log({ component: "notify", error, container, operativeId: target.operativeId });
         }
       }
     }
@@ -303,23 +240,6 @@ export class EstateNotifier {
       this.cursorInitialized = true;
     }
     if (forStart && this.cursor === null) this.seedMode = true;
-  }
-
-  private async fetchState(): Promise<RoomStateRow[]> {
-    const response = await this.fetcher(this.deps.stateUrl, {
-      headers: { Authorization: `Bearer ${this.deps.adminToken}` },
-      signal: this.abortController?.signal ?? null,
-    });
-    if (!response.ok) throw new Error(`executor state request failed with status ${response.status}`);
-    const body: unknown = await response.json();
-    if (!isPlainObject(body) || !Array.isArray(body.roomState)) return [];
-    return body.roomState.filter((row): row is RoomStateRow => {
-      return isPlainObject(row)
-        && typeof row.claimNumber === "string"
-        && typeof row.room === "string"
-        && typeof row.key === "string"
-        && "value" in row;
-    });
   }
 
   private async finalizeSeed(): Promise<void> {
@@ -401,8 +321,8 @@ export class EstateNotifier {
           headers: { Authorization: `Bearer ${this.deps.adminToken}` },
           signal: this.abortController?.signal ?? null,
         });
-        if (!response.ok) throw new Error(`executor events request failed with status ${response.status}`);
-        if (!response.body) throw new Error("executor events response had no body");
+        if (!response.ok) throw new Error(`bureau events request failed with status ${response.status}`);
+        if (!response.body) throw new Error("bureau events response had no body");
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();

@@ -153,17 +153,29 @@ tbody tr:hover { background: color-mix(in srgb, var(--surface-3) 70%, transparen
 .event-list p { margin: 0; color: #d9dfe7; font-size: .78rem; line-height: 1.45; }
 .event-list small { display: block; margin-top: .25rem; color: var(--muted); }
 .event-badge { padding: .2rem .42rem; border-radius: 4px; color: var(--text); font-size: .6rem; font-weight: 760; letter-spacing: .05em; text-transform: uppercase; background: var(--surface-3); }
-.event-badge.auditor { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, var(--surface)); }
-.event-badge.tempter { color: var(--violet); background: color-mix(in srgb, var(--violet) 12%, var(--surface)); }
-.event-badge.actuary { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, var(--surface)); }
-.event-badge.estate { color: var(--gold); background: color-mix(in srgb, var(--gold) 12%, var(--surface)); }
+.event-badge.room1 { color: var(--blue); background: color-mix(in srgb, var(--blue) 12%, var(--surface)); }
+.event-badge.room3 { color: var(--violet); background: color-mix(in srgb, var(--violet) 12%, var(--surface)); }
+.event-badge.room5 { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, var(--surface)); }
+.event-badge.bureau { color: var(--gold); background: color-mix(in srgb, var(--gold) 12%, var(--surface)); }
 
 .matrix th:not(:first-child), .matrix td:not(:first-child) { text-align: center; }
 .matrix td:first-child { white-space: nowrap; font-weight: 700; }
+.locks-panel { margin-bottom: 1rem; }
+.locks-panel .table-shell { border-radius: 8px; }
+.locks-table td:first-child { white-space: nowrap; font-weight: 700; }
+.lock-code { display: flex; align-items: center; justify-content: space-between; gap: .65rem; min-width: 9rem; }
+.lock-code code { color: var(--gold-bright); letter-spacing: .08em; }
+.room-column-heading { display: flex; min-width: 145px; flex-direction: column; align-items: center; gap: .45rem; }
+.room-column-heading > span:first-child { min-height: 2.3em; }
+.room-column-heading form { width: 100%; }
+.room-column-heading .button { width: 100%; }
 .room-status { display: inline-flex; min-width: 74px; justify-content: center; padding: .28rem .42rem; border-radius: 5px; background: var(--surface-3); color: var(--muted); font-size: .67rem; text-transform: uppercase; }
-.room-status.complete, .room-status.proven, .room-status.revealed { color: var(--green); background: color-mix(in srgb, var(--green) 10%, var(--surface)); }
-.room-status.failed, .room-status.poisoned { color: var(--red); background: color-mix(in srgb, var(--red) 10%, var(--surface)); }
-.mercy-form { margin-top: .35rem; }
+.room-status.complete, .room-status.verified, .room-status.revealed { color: var(--green); background: color-mix(in srgb, var(--green) 10%, var(--surface)); }
+.room-status.failed, .room-status.rejected { color: var(--red); background: color-mix(in srgb, var(--red) 10%, var(--surface)); }
+.override-form { margin-top: .35rem; }
+.action-result { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.result-unlock { display: inline-flex; flex: 0 0 auto; align-items: center; gap: .6rem; color: var(--muted); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
+.result-unlock code { padding: .35rem .5rem; border: 1px solid var(--line-bright); border-radius: 5px; color: var(--gold-bright); background: #0b0e13; font-size: .82rem; letter-spacing: .06em; }
 .data-list { margin: 0; padding: 0; list-style: none; }
 .data-list li { padding: .65rem 0; border-top: 1px solid var(--line); }
 .data-list li:first-child { border-top: 0; }
@@ -201,6 +213,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--surface-3) 70%, transparen
   nav a { white-space: nowrap; }
   .room-panels { grid-template-columns: 1fr; }
   .room-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .action-result { align-items: flex-start; flex-direction: column; }
   .event-list li { grid-template-columns: 50px minmax(0, 1fr); }
   .event-list li > div { grid-column: 2; }
 }

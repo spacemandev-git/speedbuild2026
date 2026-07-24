@@ -1,4 +1,4 @@
-/** Shared RPC, keypair, and Anchor helpers for the estate deploy scripts. */
+/** Shared RPC, keypair, and Anchor helpers for the Bureau deployment tools. */
 
 import { readFile } from "node:fs/promises";
 import {
@@ -16,10 +16,12 @@ import {
 
 export const RPC_URL = process.env.RPC_URL ?? "http://127.0.0.1:8899";
 export const DEPLOYER_PATH =
-  process.env.ESTATE_DEPLOYER ?? "/var/lib/estate/deployer.json";
+  process.env.BUREAU_DEPLOYER ?? "/var/lib/bureau/deployer.json";
 export const REGISTRY_IDL_PATH =
-  "/opt/packages/estate-registry/target/idl/estate_registry.json";
-export const SCRIP_MINT_PATH = "/var/lib/estate/scrip-mint.json";
+  process.env.BUREAU_IDL ??
+  "/opt/packages/bureau-registry/target/idl/bureau_registry.json";
+export const CRED_MINT_PATH =
+  process.env.CRED_MINT_PATH ?? "/var/lib/bureau/cred-mint.json";
 export const COMMITMENT: Commitment = "confirmed";
 
 export const connection = new Connection(RPC_URL, COMMITMENT);
@@ -131,16 +133,19 @@ export function configPda(programId: PublicKey): PublicKey {
   )[0];
 }
 
-export function claimPda(programId: PublicKey, claimNumber: string): PublicKey {
+export function operativePda(programId: PublicKey, operativeId: string): PublicKey {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("claim"), Buffer.from(claimNumber.toLowerCase(), "utf8")],
+    [Buffer.from("claim"), Buffer.from(operativeId.toLowerCase(), "utf8")],
     programId,
   )[0];
 }
 
-export function teamPda(programId: PublicKey, teamName: string): PublicKey {
+export function holdingsPda(
+  programId: PublicKey,
+  operativeId: string,
+): PublicKey {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("team"), Buffer.from(teamName, "utf8")],
+    [Buffer.from("holdings"), Buffer.from(operativeId, "utf8")],
     programId,
   )[0];
 }

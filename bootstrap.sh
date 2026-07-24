@@ -40,7 +40,7 @@ source config/speedbuild.env
 set +a
 
 blank_secrets=()
-for secret_key in SB_ESTATE_SECRET SB_ADMIN_TOKEN SB_HOST_AGENT_TOKEN; do
+for secret_key in SB_BUREAU_SECRET SB_ADMIN_TOKEN SB_HOST_AGENT_TOKEN; do
   if [[ -z "${!secret_key:-}" ]]; then
     blank_secrets+=("${secret_key}")
   fi

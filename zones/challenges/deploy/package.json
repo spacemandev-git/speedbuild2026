@@ -1,10 +1,10 @@
 {
-  "name": "estate-deploy",
+  "name": "bureau-deploy",
   "private": true,
   "type": "module",
   "scripts": {
     "ensure-spl": "bun run src/00-ensure-spl.ts",
-    "mint-scrip": "bun run src/10-mint-scrip.ts",
+    "mint-cred": "bun run src/10-mint-cred.ts",
     "deploy-registry": "bun run src/20-deploy-registry.ts",
     "fund-and-seed": "bun run src/30-fund-and-seed.ts",
     "dump-spl": "bun run src/dump-spl.ts",

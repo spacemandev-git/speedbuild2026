@@ -136,7 +136,7 @@ fi
 if [[ ! -x /usr/local/bin/opencode ]]; then
   curl -fsSL https://opencode.ai/install | bash
   # The installer places the binary under /root/.opencode/bin regardless of
-  # OPENCODE_INSTALL_DIR (and /root is unreadable by claimant); publish the
+  # OPENCODE_INSTALL_DIR (and /root is unreadable by operative); publish the
   # self-contained binary to a system path every user can execute.
   for cand in /root/.opencode/bin/opencode "$HOME/.opencode/bin/opencode"; do
     if [[ -x "$cand" ]]; then
@@ -151,7 +151,7 @@ fi
 # delete our mktemp WORK_DIR; recreate it before writing staged config files.
 mkdir -p "$WORK_DIR"
 
-cat >"$WORK_DIR/estate-path.sh" <<'EOF'
+cat >"$WORK_DIR/bureau-path.sh" <<'EOF'
 # System-wide Speedbuild participant toolchain.
 # RUSTUP_HOME/CARGO_HOME must be exported for every user or rustup cannot find
 # the system-installed default toolchain (cargo/rustc fail with "no default
@@ -160,7 +160,7 @@ export RUSTUP_HOME=/opt/rustup
 export CARGO_HOME=/opt/cargo
 export PATH="/opt/anchor/bin:/opt/solana/bin:/opt/cargo/bin:/usr/local/bin:$PATH"
 EOF
-install_managed_file "$WORK_DIR/estate-path.sh" /etc/profile.d/estate-path.sh 0644 root root
+install_managed_file "$WORK_DIR/bureau-path.sh" /etc/profile.d/bureau-path.sh 0644 root root
 
 # profile.d only applies to login shells. OpenCode's bash tool (and any other
 # non-login child) needs the toolchain on PATH too, so also set it in
@@ -182,18 +182,18 @@ if ! grep -Fxq /usr/local/bin/rec-shell /etc/shells; then
   echo /usr/local/bin/rec-shell >>/etc/shells
 fi
 
-if ! id claimant >/dev/null 2>&1; then
-  useradd --create-home --shell /usr/local/bin/rec-shell claimant
+if ! id operative >/dev/null 2>&1; then
+  useradd --create-home --shell /usr/local/bin/rec-shell operative
 else
-  usermod --shell /usr/local/bin/rec-shell claimant
+  usermod --shell /usr/local/bin/rec-shell operative
 fi
 
-install -d -o claimant -g claimant -m 0755 \
-  /home/claimant/estate \
-  /home/claimant/estate/rooms \
-  /home/claimant/.config/asciinema \
-  /home/claimant/.config/solana/cli \
-  /home/claimant/.config/opencode
+install -d -o operative -g operative -m 0755 \
+  /home/operative/bureau \
+  /home/operative/bureau/rooms \
+  /home/operative/.config/asciinema \
+  /home/operative/.config/solana/cli \
+  /home/operative/.config/opencode
 install -d -o root -g root -m 1777 /var/log/sessions
 
 cat >"$WORK_DIR/asciinema-config.toml" <<'EOF'
@@ -201,15 +201,15 @@ cat >"$WORK_DIR/asciinema-config.toml" <<'EOF'
 url = "http://10.61.0.10:4000"
 EOF
 install_managed_file "$WORK_DIR/asciinema-config.toml" \
-  /home/claimant/.config/asciinema/config.toml 0644 claimant claimant
+  /home/operative/.config/asciinema/config.toml 0644 operative operative
 
 cat >"$WORK_DIR/solana-config.yml" <<'EOF'
 json_rpc_url: http://10.61.0.20:8899
 websocket_url: ws://10.61.0.20:8900
-keypair_path: /home/claimant/.config/solana/id.json
+keypair_path: /home/operative/.config/solana/id.json
 EOF
 install_managed_file "$WORK_DIR/solana-config.yml" \
-  /home/claimant/.config/solana/cli/config.yml 0600 claimant claimant
+  /home/operative/.config/solana/cli/config.yml 0600 operative operative
 
 if [[ ! -s "$SCRIPT_DIR/opencode.json.template" ]]; then
   echo "$SCRIPT_DIR/opencode.json.template is missing or empty" >&2
@@ -221,42 +221,36 @@ envsubst '$SB_MODEL_ALIAS $SB_OPENCODE_CTX' \
   <"$SCRIPT_DIR/opencode.json.template" >"$WORK_DIR/opencode.json"
 jq -e . "$WORK_DIR/opencode.json" >/dev/null
 install_managed_file "$WORK_DIR/opencode.json" \
-  /home/claimant/.config/opencode/opencode.json 0600 claimant claimant
+  /home/operative/.config/opencode/opencode.json 0600 operative operative
 
-cat >"$WORK_DIR/estate-readme.md" <<'EOF'
-# Welcome to the Estate
+cat >"$WORK_DIR/bureau-readme.md" <<'EOF'
+# Speed Build workspace
 
-Challenge rooms appear under `~/estate/rooms/` as they are revealed.
-
-The Solana RPC endpoint is `http://10.61.0.20:8899`.
-
-OpenCode is preconfigured for the Estate inference service. Run `opencode` here to start.
-
-Interactive terminal sessions are recorded for competition administration.
+Room briefs appear under `~/bureau/rooms/` as they are revealed. OpenCode is preconfigured for the Bureau inference service; run `opencode` here.
 EOF
-install_managed_file "$WORK_DIR/estate-readme.md" \
-  /home/claimant/estate/README.md 0644 claimant claimant
+install_managed_file "$WORK_DIR/bureau-readme.md" \
+  /home/operative/bureau/README.md 0644 operative operative
 
-touch /home/claimant/.profile
-if ! grep -Fq '# Speedbuild estate environment' /home/claimant/.profile; then
-  cat >>/home/claimant/.profile <<'EOF'
+touch /home/operative/.profile
+if ! grep -Fq '# Speedbuild bureau environment' /home/operative/.profile; then
+  cat >>/home/operative/.profile <<'EOF'
 
-# Speedbuild estate environment (written later by the host agent).
-if [ -f "$HOME/.estate-env" ]; then
-  . "$HOME/.estate-env"
+# Speedbuild bureau environment
+if [ -f "$HOME/.bureau-env" ]; then
+  . "$HOME/.bureau-env"
 fi
 EOF
 fi
-chown claimant:claimant /home/claimant/.profile
-chmod 0644 /home/claimant/.profile
+chown operative:operative /home/operative/.profile
+chmod 0644 /home/operative/.profile
 
-cat >"$WORK_DIR/estate-sshd.conf" <<'EOF'
-Match User claimant
+cat >"$WORK_DIR/bureau-sshd.conf" <<'EOF'
+Match User operative
     PasswordAuthentication yes
 Match all
 EOF
-install_managed_file "$WORK_DIR/estate-sshd.conf" \
-  /etc/ssh/sshd_config.d/estate.conf 0644 root root
+install_managed_file "$WORK_DIR/bureau-sshd.conf" \
+  /etc/ssh/sshd_config.d/bureau.conf 0644 root root
 # sshd -t (and sshd itself) needs the privilege-separation dir, which is not
 # yet populated in a freshly configured container that has not booted ssh.
 install -d -m 0755 /run/sshd

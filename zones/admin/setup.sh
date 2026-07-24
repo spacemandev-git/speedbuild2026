@@ -72,10 +72,10 @@ while true; do
   sleep 2
 done
 
-admin_marker=/var/lib/.estate-asciinema-admin
-admin_tokens=/var/lib/estate-asciinema-admin.tokens
+admin_marker=/var/lib/.bureau-asciinema-admin
+admin_tokens=/var/lib/bureau-asciinema-admin.tokens
 if [[ ! -f ${admin_marker} ]]; then
-  tokens=$(provision-stream estate-admin)
+  tokens=$(provision-stream bureau-admin)
   printf '%s\n' "${tokens}" >"${admin_tokens}"
   chmod 0600 "${admin_tokens}"
   install -m 0600 /dev/null "${admin_marker}"
@@ -87,7 +87,7 @@ bun run build
 
 cat > /etc/systemd/system/sb-dashboard.service <<'UNIT'
 [Unit]
-Description=Speedbuild Estate admin dashboard
+Description=Speedbuild Bureau admin dashboard
 After=network-online.target docker.service
 Wants=network-online.target
 

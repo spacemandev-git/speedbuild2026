@@ -1,6 +1,6 @@
 /**
- * Fund claimant wallets and initialize exact registry ClaimRecord/TeamHoldings PDAs.
- * Usage: bun run src/30-fund-and-seed.ts [claimants.json] [--help]
+ * Fund operative wallets and initialize verification and holdings PDAs.
+ * Usage: bun run src/30-fund-and-seed.ts [operatives.json] [--help]
  */
 
 import { createHmac } from "node:crypto";
@@ -12,29 +12,23 @@ import {
 import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 import {
   cheatcode,
-  claimPda,
+  CRED_MINT_PATH,
   connection,
   errorMessage,
+  holdingsPda,
   isHelpRequest,
   loadKeypair,
   loadRegistryProgram,
-  SCRIP_MINT_PATH,
-  teamPda,
+  operativePda,
 } from "./lib";
 
-interface ClaimantInput {
-  claimNumber: string;
+interface OperativeInput {
+  operativeId: string;
   pubkey: string;
 }
 
-interface TeamInput {
-  name: string;
-  registrarKey: string;
-}
-
 interface SeedInput {
-  claimants: ClaimantInput[];
-  teams: TeamInput[];
+  operatives: OperativeInput[];
 }
 
 interface StoredMint {
@@ -47,69 +41,61 @@ function validateInput(value: unknown): SeedInput {
     throw new Error("seed input must be a JSON object");
   }
   const candidate = value as Partial<SeedInput>;
-  if (!Array.isArray(candidate.claimants) || !Array.isArray(candidate.teams)) {
-    throw new Error('seed input must contain "claimants" and "teams" arrays');
+  if (!Array.isArray(candidate.operatives)) {
+    throw new Error('seed input must contain an "operatives" array');
   }
-  for (const claimant of candidate.claimants) {
-    if (
-      !claimant ||
-      typeof claimant.claimNumber !== "string" ||
-      typeof claimant.pubkey !== "string" ||
-      claimant.claimNumber.length === 0 ||
-      Buffer.byteLength(claimant.claimNumber, "utf8") > 16
-    ) {
-      throw new Error("each claimant needs claimNumber (1..16 UTF-8 bytes) and pubkey");
-    }
+  if (Object.keys(value).some((key) => key !== "operatives")) {
+    throw new Error('seed input may contain only an "operatives" array');
   }
-  for (const team of candidate.teams) {
+  for (const operative of candidate.operatives) {
     if (
-      !team ||
-      typeof team.name !== "string" ||
-      typeof team.registrarKey !== "string" ||
-      team.name.length === 0 ||
-      Buffer.byteLength(team.name, "utf8") > 16
+      !operative ||
+      typeof operative.operativeId !== "string" ||
+      typeof operative.pubkey !== "string" ||
+      operative.operativeId.length === 0 ||
+      Buffer.byteLength(operative.operativeId, "utf8") > 16
     ) {
-      throw new Error("each team needs name (1..16 UTF-8 bytes) and registrarKey");
+      throw new Error("each operative needs operativeId (1..16 UTF-8 bytes) and pubkey");
     }
   }
   return candidate as SeedInput;
 }
 
-function estateSecret(): Buffer {
-  const encoded = process.env.SB_ESTATE_SECRET;
+function bureauSecret(): Buffer {
+  const encoded = process.env.SB_BUREAU_SECRET;
   if (!encoded || encoded.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(encoded)) {
-    throw new Error("SB_ESTATE_SECRET must be a non-empty even-length hex string");
+    throw new Error("SB_BUREAU_SECRET must be a non-empty even-length hex string");
   }
   return Buffer.from(encoded, "hex");
 }
 
-function probateNonce(secret: Buffer, claimNumber: string): bigint {
+function clearanceNonce(secret: Buffer, operativeId: string): bigint {
   const digest = createHmac("sha256", secret)
-    .update(Buffer.from(`${claimNumber}nonce`, "utf8"))
+    .update(Buffer.from(`${operativeId}nonce`, "utf8"))
     .digest();
   return digest.readBigUInt64LE(0);
 }
 
 async function loadMint(): Promise<PublicKey> {
-  const path = SCRIP_MINT_PATH;
+  const path = CRED_MINT_PATH;
   if (!(await Bun.file(path).exists())) {
-    throw new Error(`${path} is missing; run 10-mint-scrip.ts first`);
+    throw new Error(`${path} is missing; run 10-mint-cred.ts first`);
   }
   const stored = (await Bun.file(path).json()) as Partial<StoredMint>;
   if (typeof stored.address !== "string") {
-    throw new Error(`${path} does not contain a SCRIP mint address`);
+    throw new Error(`${path} does not contain a CRED mint address`);
   }
   return new PublicKey(stored.address);
 }
 
-async function seedClaimant(
+async function seedOperative(
   program: Program,
   mint: PublicKey,
-  tributeAta: PublicKey,
+  clearanceAta: PublicKey,
   secret: Buffer,
-  claimant: ClaimantInput,
+  operative: OperativeInput,
 ): Promise<void> {
-  const owner = new PublicKey(claimant.pubkey);
+  const owner = new PublicKey(operative.pubkey);
   await cheatcode("surfnet_setAccount", [
     owner.toBase58(),
     {
@@ -125,79 +111,95 @@ async function seedClaimant(
   await cheatcode("surfnet_setTokenAccount", [
     owner.toBase58(),
     mint.toBase58(),
-    // 100 SCRIP at 6 decimals — headroom for tributes, fees, and node payments
-    // across all five paid rooms plus bonus tasks.
+    // 100 CRED at 6 decimals provides headroom for room payments, fees, and
+    // node payments across all five rooms.
     { amount: 100_000_000 },
     TOKEN_PROGRAM_ID.toBase58(),
   ]);
 
-  const record = claimPda(program.programId, claimant.claimNumber);
-  if (await connection.getAccountInfo(record, "confirmed")) {
-    console.log(`Claim ${claimant.claimNumber} already initialized at ${record}`);
+  const verificationRecord = operativePda(program.programId, operative.operativeId);
+  if (await connection.getAccountInfo(verificationRecord, "confirmed")) {
+    console.log(
+      `Operative ${operative.operativeId} already initialized at ${verificationRecord}`,
+    );
     return;
   }
 
-  const nonce = probateNonce(secret, claimant.claimNumber);
-  const initClaim = program.methods.initClaim;
-  if (!initClaim) {
-    throw new Error("Registry IDL does not define the init_claim instruction");
+  const nonce = clearanceNonce(secret, operative.operativeId);
+  const initOperative = program.methods.initOperative;
+  if (!initOperative) {
+    throw new Error("Registry IDL does not define the init_operative instruction");
   }
-  // The program derives the claim PDA from lowercase(claim_number) (Room 1 spec).
+  // The program derives the verification PDA from lowercase(operative_id).
   // Anchor's client would auto-resolve it from the raw argument, which diverges
-  // for mixed-case claim numbers, so pass the lowercased PDA explicitly.
-  const claim = claimPda(program.programId, claimant.claimNumber);
-  const signature = await initClaim(claimant.claimNumber, new BN(nonce.toString()))
-    .accounts({ claim, tributeAta })
+  // for mixed-case IDs, so pass the lowercased PDA explicitly.
+  const signature = await initOperative(
+    operative.operativeId,
+    new BN(nonce.toString()),
+  )
+    .accounts({ verificationRecord, clearanceAta })
     .rpc();
-  console.log(`Initialized claim ${claimant.claimNumber} (${signature})`);
+  console.log(`Initialized operative ${operative.operativeId} (${signature})`);
 }
 
-async function seedTeam(program: Program, team: TeamInput): Promise<void> {
-  const holdings = teamPda(program.programId, team.name);
+async function seedOperativeHoldings(
+  program: Program,
+  operative: OperativeInput,
+): Promise<void> {
+  const holdings = holdingsPda(program.programId, operative.operativeId);
   if (await connection.getAccountInfo(holdings, "confirmed")) {
-    console.log(`Team ${team.name} already initialized at ${holdings}`);
+    console.log(
+      `Operative holdings ${operative.operativeId} already initialized at ${holdings}`,
+    );
     return;
   }
 
-  const initTeam = program.methods.initTeam;
-  if (!initTeam) {
-    throw new Error("Registry IDL does not define the init_team instruction");
+  const initOperativeHoldings = program.methods.initOperativeHoldings;
+  if (!initOperativeHoldings) {
+    throw new Error(
+      "Registry IDL does not define the init_operative_holdings instruction",
+    );
   }
-  const signature = await initTeam(
-    team.name,
-    new PublicKey(team.registrarKey),
+  const signature = await initOperativeHoldings(
+    operative.operativeId,
+    new PublicKey(operative.pubkey),
   ).rpc();
-  console.log(`Initialized team ${team.name} (${signature})`);
+  console.log(
+    `Initialized operative holdings ${operative.operativeId} (${signature})`,
+  );
 }
 
 async function main(): Promise<void> {
   if (isHelpRequest()) {
     console.log(
-      "Usage: bun run src/30-fund-and-seed.ts [claimants.json]\n" +
-        "Default: /var/lib/estate/claimants.json. Creates an empty skeleton when absent.",
+      "Usage: bun run src/30-fund-and-seed.ts [operatives.json]\n" +
+        "Default: /var/lib/bureau/operatives.json. Creates an empty skeleton when absent.",
     );
     return;
   }
 
-  const inputPath = process.argv[2] ?? "/var/lib/estate/claimants.json";
+  const inputPath =
+    process.argv[2] ??
+    process.env.OPERATIVES_PATH ??
+    "/var/lib/bureau/operatives.json";
   const inputFile = Bun.file(inputPath);
   if (!(await inputFile.exists())) {
-    await Bun.write(inputPath, '{\n  "claimants": [],\n  "teams": []\n}\n');
+    await Bun.write(inputPath, '{\n  "operatives": []\n}\n');
     console.log(`Created empty seed skeleton at ${inputPath}; nothing to seed yet.`);
     return;
   }
 
   const input = validateInput(await inputFile.json());
-  if (input.claimants.length === 0 && input.teams.length === 0) {
-    console.log(`No claimants or teams in ${inputPath}; nothing to seed.`);
+  if (input.operatives.length === 0) {
+    console.log(`No operatives in ${inputPath}; nothing to seed.`);
     return;
   }
 
   const deployer = await loadKeypair();
   const program = await loadRegistryProgram(deployer);
   const mint = await loadMint();
-  const secret = input.claimants.length > 0 ? estateSecret() : Buffer.alloc(0);
-  const tributeAccount = await getOrCreateAssociatedTokenAccount(
+  const secret = input.operatives.length > 0 ? bureauSecret() : Buffer.alloc(0);
+  const clearanceAccount = await getOrCreateAssociatedTokenAccount(
     connection,
     deployer,
     mint,
@@ -206,11 +208,15 @@ async function main(): Promise<void> {
     "confirmed",
   );
 
-  for (const claimant of input.claimants) {
-    await seedClaimant(program, mint, tributeAccount.address, secret, claimant);
-  }
-  for (const team of input.teams) {
-    await seedTeam(program, team);
+  for (const operative of input.operatives) {
+    await seedOperative(
+      program,
+      mint,
+      clearanceAccount.address,
+      secret,
+      operative,
+    );
+    await seedOperativeHoldings(program, operative);
   }
 }
 

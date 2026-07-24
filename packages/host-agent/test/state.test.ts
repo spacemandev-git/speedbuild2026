@@ -29,7 +29,7 @@ describe("StateStore", () => {
       participants: {
         p01: {
           n: 1,
-          claimNumber: "CLAIMANT-01",
+          operativeId: "OPERATIVE-01",
           ip: "10.61.0.101",
           sshPort: 2201,
           password: "acorn-amber-anchor-arrow",

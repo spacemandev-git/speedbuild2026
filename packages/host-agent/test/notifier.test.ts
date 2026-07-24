@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import type { ExecutorEvent, NotifierDeps } from "../src/notifier.ts";
-import { EstateNotifier, resolveDirectTargets, resolveTeamTargets } from "../src/notifier.ts";
+import type { BureauEvent, NotifierDeps } from "../src/notifier.ts";
+import { BureauNotifier, resolveDirectTargets } from "../src/notifier.ts";
 
-function event(overrides: Partial<ExecutorEvent> = {}): ExecutorEvent {
+function event(overrides: Partial<BureauEvent> = {}): BureauEvent {
   return {
     id: 1,
     type: "combo.reveal",
     room: "room1",
-    claimNumber: "CLAIMANT-01",
-    message: "The clause is satisfied.",
+    operativeId: "OPERATIVE-01",
+    message: "Room verification completed.",
     data: { combo: "1234" },
     ...overrides,
   };
@@ -18,93 +18,79 @@ describe("resolveDirectTargets", () => {
   test("formats a room 1 combination reveal", () => {
     const targets = resolveDirectTargets(event());
     expect(targets).toHaveLength(1);
-    expect(targets[0]?.claimNumber).toBe("CLAIMANT-01");
-    expect(targets[0]?.text).toContain("CLAUSE I");
+    expect(targets[0]?.operativeId).toBe("OPERATIVE-01");
+    expect(targets[0]?.text).toContain("Room 1 — Operation");
     expect(targets[0]?.text).toContain("1234");
   });
 
-  test("creates one room 3 notice with the matching fragment per claimant", () => {
+  test("creates one room 3 notice with the matching fragment per operative", () => {
     const targets = resolveDirectTargets(event({
       room: "room3",
-      claimNumber: null,
+      operativeId: null,
       data: {
         unlocks: {
-          "CLAIMANT-01": "FRAG-A",
-          "CLAIMANT-02": "FRAG-B",
-          "CLAIMANT-03": "FRAG-C",
+          "OPERATIVE-01": "FRAG-A",
+          "OPERATIVE-02": "FRAG-B",
+          "OPERATIVE-03": "FRAG-C",
         },
       },
     }));
     expect(targets).toHaveLength(3);
-    for (const [claimNumber, fragment] of [
-      ["CLAIMANT-01", "FRAG-A"],
-      ["CLAIMANT-02", "FRAG-B"],
-      ["CLAIMANT-03", "FRAG-C"],
+    for (const [operativeId, fragment] of [
+      ["OPERATIVE-01", "FRAG-A"],
+      ["OPERATIVE-02", "FRAG-B"],
+      ["OPERATIVE-03", "FRAG-C"],
     ]) {
-      const target = targets.find((candidate) => candidate.claimNumber === claimNumber);
+      const target = targets.find((candidate) => candidate.operativeId === operativeId);
       expect(target?.text).toContain(fragment);
     }
   });
 
-  test("formats mercy fragments and bonus completion", () => {
-    const mercy = resolveDirectTargets(event({
-      type: "mercy.granted",
+  test("formats a manual override fragment", () => {
+    const override = resolveDirectTargets(event({
+      type: "override.granted",
       room: "room3",
-      data: { fragment: "MERCY-FRAGMENT" },
+      data: { fragment: "OVERRIDE-FRAGMENT" },
     }));
-    expect(mercy).toHaveLength(1);
-    expect(mercy[0]?.text).toContain("MERCY GRANTED");
-    expect(mercy[0]?.text).toContain("MERCY-FRAGMENT");
-
-    const bonus = resolveDirectTargets(event({
-      type: "bonus.task-complete",
-      room: "bonus",
-      message: "Survey duty recorded.",
-      data: { task: "survey" },
-    }));
-    expect(bonus).toHaveLength(1);
-    expect(bonus[0]?.text).toContain("DUTY RECORDED");
+    expect(override).toHaveLength(1);
+    expect(override[0]?.text).toContain("MANUAL OVERRIDE");
+    expect(override[0]?.text).toContain("OVERRIDE-FRAGMENT");
   });
 
-  test("ignores paired solve events and team-only events", () => {
-    expect(resolveDirectTargets(event({ type: "room1.proven" }))).toEqual([]);
-    expect(resolveDirectTargets(event({
+  test("notifies the room 4 operative with the clearance code", () => {
+    const targets = resolveDirectTargets(event({
       room: "room4",
-      claimNumber: null,
-      data: { team: "alpha", deedCode: "DEED-1" },
-    }))).toEqual([]);
-    expect(resolveDirectTargets(event({
+      operativeId: null,
+      data: { operative: "OPERATIVE-04", clearanceCode: "CODE-04" },
+    }));
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.operativeId).toBe("OPERATIVE-04");
+    expect(targets[0]?.text).toContain("ROOM VERIFIED");
+    expect(targets[0]?.text).toContain("Clearance code: CODE-04");
+  });
+
+  test("notifies the room 5 operative with the route-complete notice", () => {
+    const targets = resolveDirectTargets(event({
       type: "room5.route-complete",
       room: "room5",
-      claimNumber: null,
-      data: { team: "alpha", hops_correct: 5, flash_seconds: 10 },
+      operativeId: null,
+      message: "Five hops reconstructed in 10 seconds.",
+      data: { operative: "OPERATIVE-05", hops_correct: 5, flash_seconds: 10 },
+    }));
+    expect(targets).toHaveLength(1);
+    expect(targets[0]?.operativeId).toBe("OPERATIVE-05");
+    expect(targets[0]?.text).toContain("ROUTE COMPLETE");
+    expect(targets[0]?.text).toContain("Five hops reconstructed in 10 seconds.");
+  });
+
+  test("ignores paired solve events and unrelated room 5 events", () => {
+    expect(resolveDirectTargets(event({ type: "room1.verified" }))).toEqual([]);
+    expect(resolveDirectTargets(event({
+      type: "room5.decoy-paid",
+      room: "room5",
+      operativeId: null,
+      data: { operative: "OPERATIVE-05", node: "NODE-1" },
     }))).toEqual([]);
-  });
-});
-
-describe("resolveTeamTargets", () => {
-  test("resolves every room 4 member of the named team", async () => {
-    const targets = await resolveTeamTargets(event({
-      room: "room4",
-      claimNumber: null,
-      data: { team: "alpha", deedCode: "DEED-ALPHA" },
-    }), async () => [
-      { claimNumber: "CLAIMANT-01", room: "room4", key: "team", value: "alpha" },
-      { claimNumber: "CLAIMANT-02", room: "room4", key: "teamName", value: { teamName: "alpha" } },
-      { claimNumber: "CLAIMANT-03", room: "room4", key: "team_name", value: "beta" },
-    ]);
-    expect(targets.map((target) => target.claimNumber).sort()).toEqual(["CLAIMANT-01", "CLAIMANT-02"]);
-    expect(targets.every((target) => target.text.includes("DEED-ALPHA"))).toBe(true);
-  });
-
-  test("does not fetch state for non-team events", async () => {
-    let fetched = false;
-    const targets = await resolveTeamTargets(event({ type: "room1.proven" }), async () => {
-      fetched = true;
-      return [];
-    });
-    expect(targets).toEqual([]);
-    expect(fetched).toBe(false);
   });
 });
 
@@ -124,13 +110,13 @@ function notifierDeps(overrides: Partial<NotifierDeps> = {}): {
   const cursorWrites: number[] = [];
   const logs: Record<string, unknown>[] = [];
   const deps: NotifierDeps = {
-    eventsUrl: "http://executor/events",
-    stateUrl: "http://executor/state",
+    eventsUrl: "http://bureau/events",
+    stateUrl: "http://bureau/state",
     adminToken: "admin-token",
     incusExec: async (container, argv, opts) => {
       execCalls.push({ container, argv, input: opts.input });
     },
-    loadParticipants: async () => ({ p01: { claimNumber: "CLAIMANT-01" } }),
+    loadParticipants: async () => ({ p01: { operativeId: "OPERATIVE-01" } }),
     readCursor: async () => 0,
     writeCursor: async (id) => {
       cursorWrites.push(id);
@@ -141,10 +127,10 @@ function notifierDeps(overrides: Partial<NotifierDeps> = {}): {
   return { deps, execCalls, cursorWrites, logs };
 }
 
-describe("EstateNotifier.handleEvent", () => {
+describe("BureauNotifier.handleEvent", () => {
   test("delivers new event ids once and persists the cursor", async () => {
     const { deps, execCalls, cursorWrites } = notifierDeps();
-    const notifier = new EstateNotifier(deps);
+    const notifier = new BureauNotifier(deps);
 
     await notifier.handleEvent(event({ id: 5, data: { combo: "5555" } }));
     expect(execCalls).toHaveLength(1);
@@ -164,26 +150,26 @@ describe("EstateNotifier.handleEvent", () => {
     expect(cursorWrites).toEqual([5, 6]);
   });
 
-  test("logs and skips a claimant without a participant container", async () => {
+  test("logs and skips an operative without a participant container", async () => {
     const { deps, execCalls, logs } = notifierDeps({ loadParticipants: async () => ({}) });
-    const notifier = new EstateNotifier(deps);
+    const notifier = new BureauNotifier(deps);
     await notifier.handleEvent(event({ id: 5 }));
     expect(execCalls).toHaveLength(0);
     expect(logs).toContainEqual({
       component: "notify",
-      skip: "unknown-claim",
-      claimNumber: "CLAIMANT-01",
+      skip: "unknown-operative",
+      operativeId: "OPERATIVE-01",
     });
   });
 });
 
-describe("EstateNotifier event stream", () => {
+describe("BureauNotifier event stream", () => {
   test("seeds from first-connection replay without delivering stale events", async () => {
     const replay = event({ id: 1, data: { combo: "1111" } });
     const live = event({ id: 2, data: { combo: "2222" } });
     const payload = [
       `id: 1\nevent: combo.reveal\ndata: ${JSON.stringify(replay)}\n\n`,
-      ": executor event stream connected\n\n",
+      ": bureau event stream connected\n\n",
       `id: 2\nevent: combo.reveal\ndata: ${JSON.stringify(live)}\n\n`,
     ].join("");
     const fetchImpl = (async () => new Response(payload, {
@@ -194,12 +180,12 @@ describe("EstateNotifier event stream", () => {
       fetchImpl,
       readCursor: async () => null,
     });
-    let notifier: EstateNotifier;
+    let notifier: BureauNotifier;
     deps.incusExec = async (container, argv, opts) => {
       execCalls.push({ container, argv, input: opts.input });
       notifier.stop();
     };
-    notifier = new EstateNotifier(deps);
+    notifier = new BureauNotifier(deps);
 
     expect(() => notifier.start()).not.toThrow();
     for (let attempt = 0; attempt < 100 && cursorWrites.at(-1) !== 2; attempt += 1) {

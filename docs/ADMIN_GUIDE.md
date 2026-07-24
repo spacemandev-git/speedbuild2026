@@ -1,216 +1,227 @@
-# Admin Guide — Running the Estate
+# Admin Guide — Running the Bureau
 
-Operational guide for the organizers who stand up and run the Speed Build 2026 "Estate" server.
-It covers bootstrapping the box, provisioning claimants, driving the show from the admin dashboard,
-handling reveals and the Executor's Mercy, and troubleshooting. Pair it with the authoritative
-[architecture contract](ARCHITECTURE.md) — this guide is the operator's how-to; that document is the
-source of truth for exact layouts, ports, and byte formats.
-
----
+Operational guide for deploying and running the Speed Build 2026 Bureau server. It covers
+bootstrapping, provisioning operatives, dashboard control, reveals, manual override, recordings,
+and recovery. Pair it with the authoritative [architecture contract](ARCHITECTURE.md), which is
+the source of truth for layouts, ports, APIs, and byte formats.
 
 ## 1. The shape of the system
 
-One bare-metal Ubuntu 24.04 server ("Sunburst") runs everything as isolated **Incus** tenants on a
-private bridge (`10.61.0.0/24`):
+One bare-metal Ubuntu 24.04 server, Sunburst, runs isolated Incus tenants on the private
+`10.61.0.0/24` bridge:
 
 | Tenant | Internal IP | Runs |
 |---|---|---|
-| `admin` | 10.61.0.10 | **Admin dashboard** (:3000 → host :8080), asciinema recording server (:4000) |
-| `challenges` | 10.61.0.20 | **surfpool** (Solana test validator, :8899/:8900), **executor-api** (:8700–:8710) |
-| `inference` | 10.61.0.30 | **llama-server** — the shared AI model (:8080). *Not exposed to the LAN.* |
-| `p01`…`pNN` | 10.61.0.101+ | One isolated box per claimant (SSH proxied to host port `2200+N`) |
-| host | 10.61.0.1 | **host-agent** — the provisioning API (:7000) |
+| `admin` | `10.61.0.10` | Admin dashboard (`:3000` → host `:8080`), asciinema server (`:4000`) |
+| `challenges` | `10.61.0.20` | surfpool (`:8899`/`:8900`), bureau-api (`:8700`–`:8710`) |
+| `inference` | `10.61.0.30` | llama-server (`:8080`), not exposed to the LAN |
+| `p01`…`pNN` | `10.61.0.101+` | One isolated box per operative, SSH proxied to host port `2200+N` |
+| host | `10.61.0.1` | host-agent provisioning API (`:7000`) |
 
-Three services matter to you as an operator:
+Three services matter operationally:
 
-- **host-agent** (host, `:7000`) — provisions, reveals to, and manages participant boxes. Bearer
-  auth with `SB_HOST_AGENT_TOKEN`.
-- **executor-api** (challenges) — the game backend: on-chain watchers, x402 endpoints, Pay.sh ledger
-  nodes, the deterministic combo generator, and the admin surface on `:8710` (bearer
-  `SB_ADMIN_TOKEN`), including the live event SSE feed.
-- **admin-dashboard** (admin, reached at `http://<host-lan-ip>:8080`) — your control room. It proxies
-  both of the above server-side; you log in with `SB_ADMIN_TOKEN`.
+- **host-agent** on `:7000` provisions, reveals to, and manages participant boxes. It uses bearer
+  `SB_HOST_AGENT_TOKEN`.
+- **bureau-api** provides on-chain watchers, x402 resources and facilitators, Pay.sh ledger nodes,
+  deterministic result generation, and the `:8710` admin surface. It runs as
+  `bureau-api.service`; admin calls use bearer `SB_ADMIN_TOKEN`.
+- **admin-dashboard** is reached at `http://<host-lan-ip>:8080`. It proxies host-agent and
+  bureau-api server-side; login uses `SB_ADMIN_TOKEN`.
 
-What the outside (venue LAN) can reach: the dashboard (`:8080`), the asciinema server (`:4000`),
-surfpool RPC/WS (`:8899`/`:8900`, for organizer laptops), and each claimant's SSH port. **Inference is
-never LAN-exposed.**
+The venue LAN can reach the dashboard (`:8080`), asciinema (`:4000`), surfpool RPC/WS
+(`:8899`/`:8900`, for organizer laptops), and participant SSH ports. Inference is never exposed
+to the LAN.
 
----
-
-## 2. Before the show — configuration
+## 2. Before the event — configuration
 
 ### 2.1 Secrets and config
 
 Bootstrap copies `config/speedbuild.env.example` to `config/speedbuild.env` on first run and stops
-until you fill three required secrets:
+until all three required secrets are set:
 
 ```sh
 openssl rand -hex 32   # run three times
 ```
 
-Set in `config/speedbuild.env`:
+Set:
 
-- `SB_ESTATE_SECRET` — HMAC seed for **every** deterministic unlock code. Keep it identical across the
-  whole event and secret; anyone with it can compute every lock.
-- `SB_ADMIN_TOKEN` — dashboard login **and** executor-api admin bearer.
+- `SB_BUREAU_SECRET` — HMAC seed for every deterministic challenge result and lock assignment.
+  Keep it fixed and private for the full event.
+- `SB_ADMIN_TOKEN` — dashboard login and bureau-api admin bearer.
 - `SB_HOST_AGENT_TOKEN` — host-agent bearer.
 
-Keep all three private. They are the entire security boundary.
+These three values form the administrative security boundary.
 
 ### 2.2 Key config knobs
 
-The full list is documented inline in `config/speedbuild.env.example`. The ones you actually tune:
+The full list is documented in `config/speedbuild.env.example`.
 
 | Key | Default | Notes |
 |---|---|---|
-| `SB_PARTICIPANT_COUNT` | 30 | How many participant boxes a full run provisions. |
-| `SB_TENANT_MODE` | `container` | `container` is the validated default. Use `vm` **only** with a dedicated non-bonded SR-IOV NIC and console/BMC recovery (see §2.4). |
-| `SB_SRIOV_ENABLE` | 0 | Leave 0 unless you are deliberately doing VF passthrough. |
-| `SB_MODEL_HF_REPO` / `SB_MODEL_QUANT` / `SB_MODEL_ALIAS` | Qwen3.6-35B-A3B / Q8_0 / `qwen3.6` | The shared model. Swappable; only one large model should be resident (CPU inference is memory-bandwidth-bound). |
-| `SB_LLAMA_PARALLEL` | 8 | Concurrent request slots. Total context (`SB_LLAMA_CTX_TOTAL`) is split across slots. |
-| `SB_SMOKE_TEST` | 0 | `1` = 2 participants, tiny model, small limits, container mode, SR-IOV skipped. |
+| `SB_PARTICIPANT_COUNT` | `30` | Number of participant boxes provisioned by a full run. |
+| `SB_OPERATIVE_POOL` | `24` | Number of operative IDs whose codes are generated in advance; minimum `16`. |
+| `SB_TENANT_MODE` | `container` | Validated default. Use `vm` only with a dedicated non-bonded SR-IOV NIC and console/BMC recovery. |
+| `SB_SRIOV_ENABLE` | `0` | Leave disabled unless intentionally using VF passthrough. |
+| `SB_MODEL_HF_REPO` / `SB_MODEL_QUANT` / `SB_MODEL_ALIAS` | `Qwen3.6-35B-A3B` / `Q8_0` / `qwen3.6` | Shared model. Only one large model should be resident. |
+| `SB_LLAMA_PARALLEL` | `8` | Concurrent request slots; total context is divided across slots. |
+| `SB_SMOKE_TEST` | `0` | `1` provisions two participants, a tiny model, small limits, container mode, and no SR-IOV. |
+
+`SB_OPERATIVE_POOL` is independent of provisioning. Codes are generated for
+`OPERATIVE-01`…`OPERATIVE-NN` the night before. Assign IDs at check-in; unused IDs become
+reserves.
 
 ### 2.3 Smoke test first
 
-**Always do a smoke run before a real deployment.** Set `SB_SMOKE_TEST=1` and bootstrap on any
-Ubuntu 24.04 machine (a cloud VM is fine). It exercises the *entire* pipeline — zones, model,
-surfpool, deploy scripts, provisioning, recording — with a tiny model and 2 participants. Everything
-except scale is identical to production.
+Run a smoke deployment before production. Set `SB_SMOKE_TEST=1` and bootstrap on Ubuntu 24.04.
+The smoke run exercises zones, model service, surfpool, deployment, provisioning, and recording
+with two participants and a tiny model. Everything except scale follows the production flow.
 
-### 2.4 SR-IOV / VM mode (only if you know you need it)
+### 2.4 SR-IOV / VM mode
 
-Container mode needs none of this. If you are running `vm` mode for line-rate VF passthrough:
-`SB_SRIOV_ENABLE=1`, `SB_SRIOV_PF` set to a **dedicated, non-bonded** NIC port, and BIOS
-IOMMU/ACS/SR-IOV/AER on. Creating VFs on a bonded management port can drop host connectivity — do this
-only with out-of-band/console recovery available. The `host/12-sriov.sh` step may require a reboot;
-see §3.2.
-
----
+Container mode needs no SR-IOV setup. For `vm` mode with line-rate VF passthrough, set
+`SB_SRIOV_ENABLE=1`, point `SB_SRIOV_PF` at a dedicated non-bonded NIC, and ensure
+IOMMU/ACS/SR-IOV/AER plus out-of-band or console recovery are available. Creating VFs on a bonded
+management port can drop host connectivity. `host/12-sriov.sh` may require the reboot flow in
+§3.2.
 
 ## 3. Bootstrapping the server
 
 ### 3.1 Run it
 
-As root, from the repo root on a fresh Ubuntu 24.04 box:
+From the repository root on a fresh Ubuntu 24.04 host:
 
 ```sh
 sudo ./bootstrap.sh
 ```
 
-Bootstrap runs six idempotent, re-runnable stages: base packages → Incus + ZFS + bridge →
-(SR-IOV, if enabled) → zones (`admin`/`challenges`/`inference`) → participant template → host-agent →
-deploy challenges. Each stage is safe to re-run; a completed stage records a marker and is skipped.
+Bootstrap runs idempotent, re-runnable stages: base packages; Incus, ZFS, and bridge; optional
+SR-IOV; `admin`/`challenges`/`inference` zones; participant template; host-agent; and challenge
+deployment. Completed stages record markers and are skipped.
 
-On success it prints a summary:
+Successful bootstrap prints:
 
-```
+```text
 Dashboard:     http://<host-lan-ip>:8080
 Asciinema:     http://<host-lan-ip>:4000
 Surfpool RPC:  http://<host-lan-ip>:8899
 Participant SSH ports: <first>-<last>
 ```
 
-### 3.2 If it asks you to reboot (SR-IOV only)
+### 3.2 Reboot and resume for SR-IOV
 
-When `SB_SRIOV_ENABLE=1` changes the kernel cmdline or installs a new kernel, bootstrap writes a
-reboot marker, prints instructions, and exits cleanly. Reboot, then resume from that stage:
+When `SB_SRIOV_ENABLE=1` changes the kernel command line or installs a kernel, bootstrap writes a
+reboot marker and exits cleanly. Reboot and resume:
 
 ```sh
 sudo ./bootstrap.sh --from 12-sriov
 ```
 
-`--from <stage>` resumes at any stage by name if you ever need to re-run a portion.
+Use `--from <stage>` to rerun from any named stage.
 
-### 3.3 Verify it came up
+### 3.3 Verify services
 
 ```sh
-# From the host — zone health (Incus + systemd + TCP), needs the host-agent token:
-curl -sS -H "Authorization: Bearer $SB_HOST_AGENT_TOKEN" http://10.61.0.1:7000/zones | jq
+# Zone health from the host:
+curl -sS -H "Authorization: Bearer $SB_HOST_AGENT_TOKEN" \
+  http://10.61.0.1:7000/zones | jq
 
-# Surfpool validator health:
+# surfpool health:
 curl -sS -X POST -H 'Content-Type: application/json' \
   --data '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' \
   http://10.61.0.20:8899 | jq
 
-# Inference server health (from the host, over the bridge):
+# Inference health over the bridge:
 curl -sS http://10.61.0.30:8080/health | jq
+
+# bureau-api health:
+curl -sS -H "Authorization: Bearer $SB_ADMIN_TOKEN" \
+  http://10.61.0.20:8710/health | jq
 ```
 
-Then open the dashboard at `http://<host-lan-ip>:8080` and log in with `SB_ADMIN_TOKEN`.
+Open `http://<host-lan-ip>:8080` and log in with `SB_ADMIN_TOKEN`.
 
----
+## 4. Provisioning operatives
 
-## 4. Provisioning claimants
+Provisioning copies the `p-template` box, assigns a static IP and SSH proxy port, sets a random
+`operative` password and optional SSH key, generates and funds a Solana keypair, assigns a private
+inference API key, writes `OPERATIVE_ID` and `BUREAU_API_KEY`, registers the operative with
+bureau-api, calls `init_operative`, and provisions an asciinema stream token.
 
-Provisioning a participant does a lot in one call: copies the golden `p-template` box, assigns a
-static IP and an SSH proxy port, sets a random `claimant` password (and your optional SSH key),
-generates a funded Solana keypair, assigns a private inference API key, writes `CLAIM_NUMBER` /
-`ESTATE_API_KEY` into the box, registers the claimant with executor-api (which triggers on-chain
-funding + `init_claim`), and provisions an asciinema stream token.
+### Dashboard path
 
-### From the dashboard (normal path)
+On **Participants**, select **Provision**. The table shows name, operative ID, IP, SSH port,
+status, revealed rooms, and wallet balances. Open a participant drawer for credentials, live
+terminal, and per-participant actions.
 
-**Participants** page → **Provision**. The table then shows name, IP, SSH port, status, revealed
-rooms, and wallet balances. Open a participant's drawer for credentials, a live terminal embed, and
-per-participant actions.
-
-### From the host-agent API (scripting / bulk)
+### Host-agent API path
 
 ```sh
-# Provision the next free participant (optionally pin a name and/or install an SSH key):
+# Provision the next free participant, optionally pinning a box name and SSH key:
 curl -sS -X POST \
   -H "Authorization: Bearer $SB_HOST_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"p01","authorizedKey":"ssh-ed25519 AAAA..."}' \
   http://10.61.0.1:7000/participants | jq
 
-# List everyone (state merged with live Incus status):
+# List state merged with live Incus status:
 curl -sS -H "Authorization: Bearer $SB_HOST_AGENT_TOKEN" \
   http://10.61.0.1:7000/participants | jq
 ```
 
-The response for a new participant includes the SSH port and generated password — this is what you
-hand the claimant at check-in. To bulk-provision a full field, loop the `POST /participants` call
-`SB_PARTICIPANT_COUNT` times with empty bodies.
+The creation response includes the SSH port and generated password for check-in. Bulk-provision
+by calling `POST /participants` `SB_PARTICIPANT_COUNT` times with empty bodies.
 
-> Provisioning is **idempotent per identity**: a `reset` (below) rebuilds a box while preserving its
-> claim number, keys, and revealed rooms.
+Provisioning is idempotent per identity. A reset rebuilds the box while preserving its operative
+ID, keys, and revealed rooms.
 
----
+### Bureau state paths
 
-## 5. Running the show — the dashboard
+The deployment and recovery paths are:
 
-Log in at `http://<host-lan-ip>:8080` with `SB_ADMIN_TOKEN`. Pages:
+| Data | Path |
+|---|---|
+| Operative registry | `/var/lib/bureau/operatives.json` |
+| Bureau deployer keypair | `/var/lib/bureau/deployer.json` |
+| bureau-api SQLite state | `/var/lib/bureau-api/state.sqlite` |
+| Registry IDL | `/opt/packages/bureau-registry/target/idl/bureau_registry.json` |
 
-- **Overview** — zone health cards, surfpool slot/health, inference `/health` + `/slots`, and the live
-  **event feed** (SSE). This is your at-a-glance heartbeat.
-- **Participants** — the provision button, the participant table, and per-participant drawers
-  (credentials, live terminal, reveal/suspend/reset actions).
-- **Live Wall** — a grid of every active claimant's live terminal, for the broadcast.
-- **Challenges** — the claimant × room status matrix, **reveal-to-all**, the **Executor's Mercy**
-  button, and room-specific panels (Room 3 reconstruction attempts, Room 5 scoreboard).
-- **Recordings** — the asciinema library with embedded replays.
+The operative registry uses top-level key `operatives`.
 
-The browser only ever talks to the dashboard and the asciinema server; all privileged calls to
-host-agent and executor-api happen server-side with the tokens injected.
+## 5. Running the event — dashboard
 
-### The event feed
+Log in at `http://<host-lan-ip>:8080` with `SB_ADMIN_TOKEN`.
 
-Every consequential event streams live (`room1.proven`, `room2.fee-kept`, `room3.trap-settled`,
-`room4.presented`, `room5.route-complete`, `combo.reveal`, `mercy.granted`, …). This is both your
-operational monitor and the raw material for the broadcast Ledger Wall / Executor Feed. The last 50
-events are replayed on connect, then live updates follow. Room 1/2 **rejection** diagnostics are
-admin-only here — the public surface never says why a claimant failed.
+- **Overview** — zone health, surfpool slot/health, inference `/health` and `/slots`, and the live
+  SSE event feed.
+- **Participants** — provision button, participant table, and drawers for credentials, terminal,
+  reveal, suspend, and reset.
+- **Live Wall** — every active operative terminal for production monitoring.
+- **Challenges** — operative × room status matrix; reveal-to-all; manual override; Room 3
+  reconstruction attempts; Room 5 scoreboard; and a **LOCKS** panel listing every lock, assigned
+  group, and live operative, with the live code revealed only on request. It also provides
+  force-complete per operative and mark-room-complete controls.
+- **Recordings** — asciinema library and embedded replays.
 
----
+The browser talks only to the dashboard and asciinema. Privileged host-agent and bureau-api calls
+are server-side with bearer tokens injected there.
+
+### Event feed
+
+Consequential events stream through `GET /events`, including `operative.registered`,
+`room1.verified`, `room1.rejected`, `room2.fee-kept`, `room3.trap-settled`, `room4.presented`,
+`room5.route-complete`, `combo.reveal`, `room.revealed`, `override.granted`,
+`override.completed`, and `room.completed`.
+
+The latest 50 events replay on connection before live updates. Room 1 and Room 2 rejection details
+are admin-only; the public surface does not explain a failed attempt.
 
 ## 6. Reveals
 
-A room's brief and its live parameters stay sealed until you reveal it. Reveal pushes the room's
-content into the claimant's box (`~/estate/rooms/<room>/`) and unseals its clause endpoint.
+Brief content and live parameters stay unavailable until reveal. Reveal pushes
+`~/bureau/rooms/<room>/BRIEF.md` into the participant box and enables
+`GET /brief/:room?operative=`.
 
 ```sh
-# Reveal one room to one participant:
 curl -sS -X POST \
   -H "Authorization: Bearer $SB_HOST_AGENT_TOKEN" \
   -H "Content-Type: application/json" \
@@ -218,36 +229,55 @@ curl -sS -X POST \
   http://10.61.0.1:7000/participants/p01/reveal
 ```
 
-For "everyone at once," use **reveal-to-all** on the dashboard's Challenges page. Reveal in the order
-the show runs the rooms; a sealed room returns `404` from its clause endpoint, so revealing is what
-"opens the door."
+For a simultaneous release, use **reveal-to-all** on **Challenges**. Reveal rooms in event order.
+Before reveal, the operative's `/brief` request returns `404`.
 
----
+## 7. Manual override
 
-## 7. The Executor's Mercy
+Verification gates the reveal of a value, never its existence. Every code exists from the moment
+it is generated the night before, whether or not anyone earns it. The system decides when it is
+shown, not whether it is real. A marshal can therefore short-circuit any gate at any time without
+breaking anything downstream.
 
-Because every unlock code is deterministic (`HMAC_SHA256(SB_ESTATE_SECRET, claim ‖ room)`), you can
-release a stuck claimant's *correct* combination or deed without anyone guessing. Mercy is a real,
-priced, on-screen event — not a quiet backdoor:
+### Route 1 — system side
 
-- Trigger it from the **Challenges** page (per-claimant; for Room 3, it hands the claimant their
-  correct key fragment so the group is never blocked by one laptop).
-- It emits a `mercy.granted` event and is announced/priced against the burning pot by the Actuary.
+The **Challenges** page can display all lock assignments, reveal any live lock code at any time,
+issue any well-formed operative ID a valid challenge result on demand, force-complete one room for
+one operative, and mark a whole room complete. None of these actions depends on normal challenge
+state.
 
-Use it deliberately — it keeps the show moving without becoming a production embarrassment, but it is
-meant to *cost* the pot, so it stays a genuine decision on camera.
+The `:8710` API uses bearer `SB_ADMIN_TOKEN`:
 
----
+```http
+GET /locks
+POST /override {"operativeId":"OPERATIVE-07","room":"room2"}
+POST /force-complete {"operativeId":"OPERATIVE-07","room":"room2"}
+POST /rooms/room2/complete
+```
 
-## 8. Participant lifecycle operations
+- `GET /locks` returns `{pool, locks:[{room,lock,members,liveOperative,liveCode}]}` and reproduces
+  the night-before lock sheet.
+- `POST /override` returns the correct combo or fragment for any well-formed operative ID,
+  regardless of registration or progress, and emits `override.granted`.
+- `POST /force-complete` records the operative's room completion, returns the unlock, and emits
+  `override.completed`.
+- `POST /rooms/:room/complete` writes whole-room completion and emits `room.completed`.
 
-All available from the participant drawer or the host-agent API:
+### Route 2 — physical side
+
+Every physical lock requires a master key, known reset code, or documented bypass that works with
+no system or venue network. The route must be tested and documented before the event day. Lock
+bypass is a required props/purchasing item, not an optional software task.
+
+## 8. Participant lifecycle
+
+All actions are available in the participant drawer and through host-agent:
 
 | Action | API | Effect |
 |---|---|---|
-| Suspend | `POST /participants/:name/suspend` | Stops the box (frees CPU/RAM; identity kept). |
+| Suspend | `POST /participants/:name/suspend` | Stops the box while retaining identity. |
 | Resume | `POST /participants/:name/resume` | Starts a suspended box. |
-| Reset | `POST /participants/:name/reset` | Rebuilds from template but **re-applies** IP, keys, and reveals. Use when a box is wedged. |
+| Reset | `POST /participants/:name/reset` | Rebuilds from the template and reapplies IP, keys, identity, and reveals. |
 | Delete | `DELETE /participants/:name` | Destroys the box and releases its inference API key. |
 
 ```sh
@@ -255,52 +285,46 @@ curl -sS -X POST -H "Authorization: Bearer $SB_HOST_AGENT_TOKEN" \
   http://10.61.0.1:7000/participants/p01/reset
 ```
 
-Reset is your go-to recovery: a claimant who has corrupted their environment gets a clean box back
-with the same identity and the same rooms already revealed.
-
----
+Reset is the standard recovery for a damaged participant environment.
 
 ## 9. Recordings
 
-- Sessions record to the self-hosted **asciinema server** in the `admin` tenant (`:4000`), with a
-  local `.cast` fallback written inside each box (`/var/log/sessions`). Recording is **fail-open**:
-  if the relay or recorder can't start, the claimant still gets a working shell — a broken relay can
-  never block a login.
-- The **Live Wall** and per-participant terminal embeds are live asciinema streams, provisioned per
-  box at creation time.
-- **Two cautions:** the asciinema server grants admin to the *first* user created (setup creates
-  `estate-admin` before any participant — don't create users out of order), and the server's admin
-  panel port (`4002`) is **unauthenticated — never publish it** to the LAN. Only `:4000` is meant to
-  be reachable.
-
----
+- Interactive sessions stream to the self-hosted asciinema server in `admin` on `:4000`, with a
+  local `.cast` fallback at `/var/log/sessions` inside each box.
+- Recording is fail-open. If the relay or recorder fails, the operative still receives a shell.
+- The **Live Wall** and participant terminal embeds use streams provisioned when each box is
+  created.
+- asciinema grants admin to the first user created. Setup must create `bureau-admin` before any
+  participant account.
+- The asciinema admin panel on `:4002` is unauthenticated and must never be published to the LAN.
+  Only `:4000` is intended for venue access.
 
 ## 10. Troubleshooting
 
-| Symptom | Where to look / what to do |
+| Symptom | Where to look / action |
 |---|---|
-| A zone is down | `GET /zones` (host-agent) or the Overview cards. Then `incus list` and `incus exec <zone> systemctl status <svc>` on the host. |
-| surfpool not healthy after reboot | The `--db` state file should persist; if not, the deploy scripts are idempotent — re-run `host/50-deploy-challenges.sh` (or `sudo ./bootstrap.sh --from 50-deploy-challenges`). |
-| Model missing / inference 503 | The model download (`zones/inference/download-model.sh`) needs internet at setup time and lands in the host-mounted `SB_MODELS_DIR` (survives rebuilds). Re-run inference setup if the GGUF is absent. |
-| SPL programs missing on the surfnet | Deploy step `00-ensure-spl.ts` loads bundled `.so` dumps under `--offline`; if it was skipped, re-run the deploy. |
-| Inference feels slow | Expected under concurrency — CPU inference yields a few tok/s per user at 5–10 concurrent. Check `SB_LLAMA_PARALLEL` and slot usage on Overview; the quant is config-swappable if you need to trade quality for speed. |
-| Claimant can't log in | Their box may be suspended (resume it) or wedged (reset it). Recording failures never block login, so that's not the cause. |
-| A clause endpoint returns 404 | The room isn't revealed to that claimant yet. Reveal it. |
+| A zone is down | Check `GET /zones` or Overview, then `incus list` and `incus exec <zone> systemctl status <svc>`. |
+| surfpool is unhealthy after reboot | Verify the `--db` state file. If necessary rerun `host/50-deploy-challenges.sh` or `sudo ./bootstrap.sh --from 50-deploy-challenges`; deployment programs are idempotent. |
+| bureau-api is down | In `challenges`, inspect `systemctl status bureau-api.service` and `/var/lib/bureau-api/state.sqlite`; then rerun the challenge deployment stage if needed. |
+| Model missing or inference returns `503` | Model download requires setup-time internet and stores the GGUF in host-mounted `SB_MODELS_DIR`. Rerun inference setup if absent. |
+| SPL programs missing | `00-ensure-spl.ts` loads bundled `.so` files in offline mode. Rerun deployment if it was skipped. |
+| Inference is slow | A few tokens per second is expected at 5–10 concurrent users. Check `SB_LLAMA_PARALLEL` and Overview slot use; change quantization if necessary. |
+| Operative cannot log in | Resume a suspended box or reset a damaged one. Recording failure does not block login. |
+| `/brief/:room?operative=` returns `404` | The room has not been revealed to that operative. Reveal it. |
+| Room 1 registration state is missing | Compare `/var/lib/bureau/operatives.json`, bureau-api `GET /state`, the `VerificationRecord`, and deployment logs for `init_operative`. |
+| Room 4 presentation fails | Check the IDL path, `ClearanceRecord` freshness and `presented` flag, then review `room4.presented` or rejection diagnostics. |
 
-**General recovery principle:** every bootstrap stage and every deploy script is idempotent and
-re-runnable. When in doubt, re-run the relevant stage with `sudo ./bootstrap.sh --from <stage>` rather
-than hand-patching a zone.
-
----
+Every bootstrap stage and deployment program is idempotent and re-runnable. Prefer
+`sudo ./bootstrap.sh --from <stage>` over manual changes inside a tenant.
 
 ## 11. Security checklist
 
-- `SB_ESTATE_SECRET`, `SB_ADMIN_TOKEN`, `SB_HOST_AGENT_TOKEN` stay secret. Rotating `SB_ESTATE_SECRET`
-  changes **every** unlock code — never change it mid-event.
-- Inference (`:8080`) is not LAN-exposed. Keep it that way.
-- The asciinema admin port (`:4002`) is unauthenticated — never publish it.
-- Everything is a private Solana test network with a token you mint (`SCRIP`). Nothing touches
-  mainnet; the on-screen prize burn is production-side, not a real transfer. Worst case a claimant
-  "loses" `SCRIP` you minted.
-- host-agent validates every input against `[a-z0-9-]` and never passes raw input to a shell — keep
-  it that way if you extend it.
+- Keep `SB_BUREAU_SECRET`, `SB_ADMIN_TOKEN`, and `SB_HOST_AGENT_TOKEN` private. Rotating
+  `SB_BUREAU_SECRET` changes every code and lock assignment; never rotate it during the event.
+- Do not expose inference `:8080` to the LAN.
+- Do not expose the unauthenticated asciinema admin port `:4002`.
+- Solana devnet and the pre-funded custom `CRED` token prevent mainnet and real-money exposure.
+- Keep host-agent input validation restricted to `[a-z0-9-]`; never pass unvalidated input to a
+  shell.
+- Restrict read access to `/var/lib/bureau/deployer.json`, `/var/lib/bureau/operatives.json`, and
+  `/var/lib/bureau-api/state.sqlite`.

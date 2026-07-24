@@ -40,7 +40,7 @@ Asciinema:     http://${host_lan_ip}:4000
 Surfpool RPC:  http://${host_lan_ip}:8899
 Participant SSH ports: ${ssh_port_first}-${ssh_port_last}
 
-Keep SB_ESTATE_SECRET, SB_ADMIN_TOKEN, and SB_HOST_AGENT_TOKEN private.
+Keep SB_BUREAU_SECRET, SB_ADMIN_TOKEN, and SB_HOST_AGENT_TOKEN private.
 Use the configured admin and host-agent tokens to access their protected services.
 EOF
 

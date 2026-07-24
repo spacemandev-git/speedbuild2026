@@ -30,15 +30,15 @@
 
 <div class="page-header">
   <div>
-    <p class="eyebrow">Estate telemetry</p>
+    <p class="eyebrow">Bureau telemetry</p>
     <h1>Operations overview</h1>
-    <p>A live reading of the rooms, executors, and claimant infrastructure.</p>
+    <p>Live room, service, and operative infrastructure status.</p>
   </div>
 </div>
 
 <section class="grid health-grid" aria-label="Zone health">
   {#if data.zones.ok}
-    {#each zones as zone}
+    {#each zones as zone (zone.name)}
       <article class="health-card">
         <div class="health-card-header">
           <h2>{zone.name}</h2>
@@ -75,11 +75,11 @@
 
   <article class="health-card" class:error={data.participantCount === null}>
     <div class="health-card-header">
-      <h2>Claimants</h2>
+      <h2>Operatives</h2>
       <span class="status-label"><span class="status-dot" class:good={data.participantCount !== null}></span>registered</span>
     </div>
     <strong class="metric">{data.participantCount ?? '—'}</strong>
-    <small>{data.participantError ?? 'participant estates under administration'}</small>
+    <small>{data.participantError ?? 'operative environments under administration'}</small>
   </article>
 </section>
 

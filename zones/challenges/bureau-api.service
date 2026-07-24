@@ -1,0 +1,17 @@
+[Unit]
+Description=Bureau game API
+After=network-online.target surfpool.service
+Wants=network-online.target
+Requires=surfpool.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/packages/bureau-api
+ExecStart=/usr/local/bin/bun run /opt/packages/bureau-api/src/index.ts
+EnvironmentFile=/etc/speedbuild.env
+Environment=BUREAU_DEPLOYER=/var/lib/bureau/deployer.json
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

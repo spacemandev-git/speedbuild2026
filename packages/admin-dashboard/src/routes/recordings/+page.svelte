@@ -1,19 +1,17 @@
 <script lang="ts">
-  let { data } = $props();
-  let serverUrl = $state('');
+  import { browser } from '$app/environment';
 
-  $effect(() => {
-    serverUrl = `http://${window.location.hostname}:4000`;
-  });
+  let { data } = $props();
+  const serverUrl = $derived(browser ? `http://${window.location.hostname}:4000` : '');
 </script>
 
-<svelte:head><title>Recordings · The Estate</title></svelte:head>
+<svelte:head><title>Recordings · The Bureau</title></svelte:head>
 
 <div class="page-header">
   <div>
-    <p class="eyebrow">Permanent witness</p>
+    <p class="eyebrow">Session archive</p>
     <h1>Recordings</h1>
-    <p>Export terminal session recordings for every claimant in the estate.</p>
+    <p>Export terminal session recordings for every operative.</p>
   </div>
   <div class="action-row">
     <a class="button" href="/recordings/archive" download>Export all recordings</a>
@@ -23,7 +21,7 @@
 
 <div class="notice">
   The browser can’t embed the asciinema server directly. Use these buttons to download the raw <code>.cast</code>
-  recordings pulled from each claimant box at <code>/var/log/sessions/</code>.
+  recordings pulled from each operative environment at <code>/var/log/sessions/</code>.
 </div>
 
 {#if data.loadError}
@@ -31,12 +29,12 @@
 {/if}
 
 {#if data.participants.length === 0}
-  <div class="panel empty-state">No claimants are available for recording export.</div>
+  <div class="panel empty-state">No operatives are available for recording export.</div>
 {:else}
   <div class="table-shell">
     <table>
       <thead>
-        <tr><th>Claimant</th><th>Recordings</th></tr>
+        <tr><th>Operative</th><th>Recordings</th></tr>
       </thead>
       <tbody>
         {#each data.participants as participant (participant.name)}
