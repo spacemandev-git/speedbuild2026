@@ -21,6 +21,7 @@ describe("resolveDirectTargets", () => {
     expect(targets[0]?.operativeId).toBe("OPERATIVE-01");
     expect(targets[0]?.text).toContain("Room 1 — Operation");
     expect(targets[0]?.text).toContain("1234");
+    expect(targets[0]?.text).toContain("Next: Room 2 — Assembly");
   });
 
   test("creates one room 3 notice with the matching fragment per operative", () => {
@@ -43,6 +44,7 @@ describe("resolveDirectTargets", () => {
     ]) {
       const target = targets.find((candidate) => candidate.operativeId === operativeId);
       expect(target?.text).toContain(fragment);
+      expect(target?.text).toContain("Next: Room 4 — Minesweeper");
     }
   });
 
@@ -55,6 +57,24 @@ describe("resolveDirectTargets", () => {
     expect(override).toHaveLength(1);
     expect(override[0]?.text).toContain("MANUAL OVERRIDE");
     expect(override[0]?.text).toContain("OVERRIDE-FRAGMENT");
+    expect(override[0]?.text).toContain("Next: Room 4 — Minesweeper");
+  });
+
+  test("formats a force-completed room with its unlock and next step", () => {
+    const override = resolveDirectTargets(event({
+      type: "override.completed",
+      room: "room2",
+      message: "Room force-completed.",
+      data: { combo: "FORCED-COMBO" },
+    }));
+    expect(override).toHaveLength(1);
+    expect(override[0]?.text).toContain("ROOM FORCE-COMPLETED");
+    expect(override[0]?.text).toContain("Room force-completed.");
+    expect(override[0]?.text).toContain("Combination: FORCED-COMBO");
+    expect(override[0]?.text).toContain("Next: Room 3 — Trust");
+    expect(override[0]?.text).toEndWith(
+      "Next: Room 3 — Trust. Its brief appears at ~/bureau/rooms/room3/BRIEF.md when revealed — see a marshal to proceed.",
+    );
   });
 
   test("notifies the room 4 operative with the clearance code", () => {
@@ -67,6 +87,7 @@ describe("resolveDirectTargets", () => {
     expect(targets[0]?.operativeId).toBe("OPERATIVE-04");
     expect(targets[0]?.text).toContain("ROOM VERIFIED");
     expect(targets[0]?.text).toContain("Clearance code: CODE-04");
+    expect(targets[0]?.text).toContain("Next: Room 5 — Memory Path");
   });
 
   test("notifies the room 5 operative with the route-complete notice", () => {
@@ -81,6 +102,8 @@ describe("resolveDirectTargets", () => {
     expect(targets[0]?.operativeId).toBe("OPERATIVE-05");
     expect(targets[0]?.text).toContain("ROUTE COMPLETE");
     expect(targets[0]?.text).toContain("Five hops reconstructed in 10 seconds.");
+    expect(targets[0]?.text).toContain("All five rooms are complete");
+    expect(targets[0]?.text).toEndWith("All five rooms are complete. Report to a marshal.");
   });
 
   test("ignores paired solve events and unrelated room 5 events", () => {

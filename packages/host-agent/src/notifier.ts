@@ -32,6 +32,21 @@ export const ROOM_LABELS: Record<string, string> = {
   room5: "Room 5 — Memory Path",
 };
 
+export function nextStep(room: string | null): string | null {
+  const nextRooms: Record<string, string> = {
+    room1: "room2",
+    room2: "room3",
+    room3: "room4",
+    room4: "room5",
+  };
+  const nextRoomId = room === null ? undefined : nextRooms[room];
+  if (nextRoomId !== undefined) {
+    return `Next: ${ROOM_LABELS[nextRoomId]}. Its brief appears at ~/bureau/rooms/${nextRoomId}/BRIEF.md when revealed — see a marshal to proceed.`;
+  }
+  if (room === "room5") return "All five rooms are complete. Report to a marshal.";
+  return null;
+}
+
 const DELIVERY_SCRIPT = `set -u
 inbox="/home/operative/bureau/inbox.md"
 mkdir -p /home/operative/bureau
@@ -54,6 +69,7 @@ export function formatNotice(opts: {
   message: string;
   unlockLabel?: string;
   unlock?: string;
+  next?: string;
 }): string {
   const roomLabel = opts.room === null ? "Bureau" : (ROOM_LABELS[opts.room] ?? "Bureau");
   const lines = [
@@ -62,6 +78,7 @@ export function formatNotice(opts: {
     opts.message,
   ];
   if (opts.unlock) lines.push(`${opts.unlockLabel ?? "Unlock"}: ${opts.unlock}`);
+  if (opts.next) lines.push(opts.next);
   return lines.join("\n");
 }
 
@@ -90,6 +107,7 @@ export function resolveDirectTargets(event: BureauEvent): NotifyTarget[] {
       message: event.message,
       unlockLabel: "Combination",
       unlock: String(event.data.combo),
+      next: nextStep(event.room)!,
     })];
   }
 
@@ -104,6 +122,7 @@ export function resolveDirectTargets(event: BureauEvent): NotifyTarget[] {
       message: event.message,
       unlockLabel: "Clearance code",
       unlock: String(event.data.clearanceCode),
+      next: nextStep("room4")!,
     })];
   }
 
@@ -115,6 +134,7 @@ export function resolveDirectTargets(event: BureauEvent): NotifyTarget[] {
       room: "room5",
       headline: "ROUTE COMPLETE",
       message: event.message,
+      next: nextStep("room5")!,
     })];
   }
 
@@ -127,6 +147,7 @@ export function resolveDirectTargets(event: BureauEvent): NotifyTarget[] {
         message: event.message,
         unlockLabel: "Fragment",
         unlock: fragment,
+        next: nextStep("room3")!,
       })];
     });
   }
@@ -142,6 +163,28 @@ export function resolveDirectTargets(event: BureauEvent): NotifyTarget[] {
       headline: "MANUAL OVERRIDE",
       message: event.message,
     };
+    const next = nextStep(event.room);
+    if (next !== null) opts.next = next;
+    if (unlock !== undefined) {
+      opts.unlock = unlock;
+      opts.unlockLabel = combo !== undefined ? "Combination" : "Fragment";
+    }
+    return [noticeTarget(event.operativeId, opts)];
+  }
+
+  if (event.type === "override.completed" && typeof event.operativeId === "string") {
+    const combo = typeof event.data.combo === "string" ? event.data.combo : undefined;
+    const fragment = combo === undefined && typeof event.data.fragment === "string"
+      ? event.data.fragment
+      : undefined;
+    const unlock = combo ?? fragment;
+    const opts: Parameters<typeof formatNotice>[0] = {
+      room: event.room,
+      headline: "ROOM FORCE-COMPLETED",
+      message: event.message,
+    };
+    const next = nextStep(event.room);
+    if (next !== null) opts.next = next;
     if (unlock !== undefined) {
       opts.unlock = unlock;
       opts.unlockLabel = combo !== undefined ? "Combination" : "Fragment";
