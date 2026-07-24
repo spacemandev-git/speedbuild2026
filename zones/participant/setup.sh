@@ -227,6 +227,7 @@ cat >"$WORK_DIR/bureau-readme.md" <<'EOF'
 # Speed Build workspace
 
 Room briefs appear under `~/bureau/rooms/` as they are revealed. OpenCode is preconfigured for the Bureau inference service; run `opencode` here.
+First login? Start with `~/PLAYERS_GUIDE.md` — the practical guide to your box and tools.
 EOF
 install_managed_file "$WORK_DIR/bureau-readme.md" \
   /home/operative/bureau/README.md 0644 operative operative

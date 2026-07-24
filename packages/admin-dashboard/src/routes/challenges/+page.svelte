@@ -242,6 +242,11 @@
                   <input type="hidden" name="room" value={room.number} />
                   <button class="button danger small" type="submit">Force complete</button>
                 </form>
+                {#if form && 'action' in form && 'operativeId' in form && 'room' in form
+                  && form.operativeId === operative.operativeId && form.room === room.number
+                  && 'unlock' in form && form.unlock && 'unlockLabel' in form}
+                  <div class="result-unlock"><span>{form.unlockLabel}</span><code>{form.unlock}</code></div>
+                {/if}
               </td>
             {/each}
           </tr>

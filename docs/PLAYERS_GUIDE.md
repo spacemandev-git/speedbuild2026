@@ -17,6 +17,7 @@ At check-in you receive:
 
 Your box includes a pre-funded wallet, the complete Solana/x402/Pay.sh toolchain, and a local AI
 coding assistant. No installation is required to start.
+A copy of this guide is pre-installed at `~/PLAYERS_GUIDE.md` on every box.
 
 ### Connecting
 

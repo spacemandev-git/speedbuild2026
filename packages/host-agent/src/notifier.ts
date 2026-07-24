@@ -24,7 +24,7 @@ export interface NotifierDeps {
   log?: (entry: Record<string, unknown>) => void;
 }
 
-const ROOM_LABELS: Record<string, string> = {
+export const ROOM_LABELS: Record<string, string> = {
   room1: "Room 1 — Operation",
   room2: "Room 2 — Assembly",
   room3: "Room 3 — Trust",
@@ -39,6 +39,14 @@ msg="$(cat)"
 printf '\n%s\n' "$msg" >> "$inbox"
 chown -R operative:operative /home/operative/bureau 2>/dev/null || true
 printf '%s\n' "$msg" | wall -n 2>/dev/null || printf '%s\n' "$msg" | wall 2>/dev/null || true`;
+
+export async function deliverNotice(
+  incusExec: NotifierDeps["incusExec"],
+  container: string,
+  text: string,
+): Promise<void> {
+  await incusExec(container, ["bash", "-c", DELIVERY_SCRIPT], { input: text });
+}
 
 export function formatNotice(opts: {
   room: string | null;
@@ -223,7 +231,7 @@ export class BureauNotifier {
           continue;
         }
         try {
-          await this.deps.incusExec(container, ["bash", "-c", DELIVERY_SCRIPT], { input: target.text });
+          await deliverNotice(this.deps.incusExec, container, target.text);
         } catch (error) {
           this.log({ component: "notify", error, container, operativeId: target.operativeId });
         }

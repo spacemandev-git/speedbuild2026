@@ -53,6 +53,26 @@ async function appendOperative(path: string, operative: RegistryOperative): Prom
   await writeFile(path, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
 }
 
+async function removeRegistryOperative(path: string, operativeId: string): Promise<void> {
+  let current: unknown;
+  try { current = JSON.parse(await readFile(path, "utf8")) as unknown; } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return;
+    throw error;
+  }
+  const wrapped = typeof current === "object" && current !== null && !Array.isArray(current)
+    && Array.isArray((current as { operatives?: unknown }).operatives);
+  const entries = (wrapped ? (current as { operatives: unknown[] }).operatives : current) as unknown;
+  if (!Array.isArray(entries)) throw new Error(`Operative registry ${path} must be an array or {operatives: []}`);
+  const next = entries.filter((entry) => {
+    return typeof entry !== "object" || entry === null
+      || (entry as { operativeId?: unknown }).operativeId !== operativeId;
+  });
+  const registry = wrapped
+    ? { ...(current as object), operatives: next }
+    : { operatives: next };
+  await writeFile(path, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+}
+
 async function runSeedCommand(ctx: AppContext): Promise<Record<string, unknown>> {
   const seedProgram = join(ctx.config.deployDir, "src", "30-fund-and-seed.ts");
   try { await access(seedProgram, constants.R_OK); } catch {
@@ -116,6 +136,19 @@ export function createAdminApp(ctx: AppContext): Hono {
       message: `${body.operativeId}: operative registered.`, data: { funding },
     });
     return c.json({ operative, funding }, 201);
+  });
+
+  app.delete("/operatives/:operativeId", async (c) => {
+    const operativeId = c.req.param("operativeId");
+    if (!OPERATIVE_PATTERN.test(operativeId)) return c.json({ error: "invalid operativeId" }, 400);
+    if (!ctx.db.removeOperative(operativeId)) return c.json({ error: "operative not found" }, 404);
+    await removeRegistryOperative(ctx.config.operativeRegistryPath, operativeId);
+    ctx.events.emit({
+      type: "operative.removed",
+      operativeId,
+      message: `${operativeId}: deregistered; box deleted.`,
+    });
+    return c.json({ ok: true, operativeId });
   });
 
   app.post("/reveal", async (c) => {

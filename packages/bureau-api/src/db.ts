@@ -96,6 +96,17 @@ export class BureauDatabase {
     return this.sqlite.query("SELECT * FROM operatives ORDER BY operative_id").all() as OperativeRow[];
   }
 
+  removeOperative(operativeId: string): boolean {
+    if (operativeId === "*") return false;
+    const remove = this.sqlite.transaction((id: string) => {
+      this.sqlite.query("DELETE FROM reveals WHERE operative_id = ?").run(id);
+      this.sqlite.query("DELETE FROM room_state WHERE operative_id = ?").run(id);
+      const result = this.sqlite.query("DELETE FROM operatives WHERE operative_id = ?").run(id);
+      return result.changes > 0;
+    });
+    return remove(operativeId);
+  }
+
   listRoom1WatchCandidates(): OperativeRow[] {
     // Watch every unverified operative, including those without a recorded
     // Room 1 reveal. Exact nonce-derived payment and memo matching provide the

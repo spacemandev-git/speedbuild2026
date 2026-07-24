@@ -217,9 +217,11 @@ function normalizeBureauState(payload: unknown): BureauState {
         'in-progress'
       )!;
       const details = objectValue(current?.detail) ?? {};
+      const detail = { ...details, [stringValue(row.key) ?? 'state']: value };
+      // A marshal force-completion outranks whatever status the room was in.
       operative.rooms[room] = {
-        status,
-        detail: { ...details, [stringValue(row.key) ?? 'state']: value }
+        status: detail.forced === true ? 'force-completed' : status,
+        detail
       };
     }
   }

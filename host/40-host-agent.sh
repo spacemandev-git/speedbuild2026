@@ -27,6 +27,7 @@ content_dst=/opt/speedbuild/challenges-content
 [[ -d "${content_src}" ]] || sb_die "Required content directory does not exist: ${content_src}"
 install -d -m 0755 "${content_dst}"
 cp -a "${content_src}/." "${content_dst}/"
+install -m 0644 "${SB_REPO_ROOT}/docs/PLAYERS_GUIDE.md" "${content_dst}/PLAYERS_GUIDE.md"
 
 install -m 0600 "${SB_REPO_ROOT}/config/speedbuild.env" /etc/speedbuild.env
 cat > /etc/systemd/system/sb-host-agent.service <<'EOF'

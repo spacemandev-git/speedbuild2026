@@ -1,9 +1,11 @@
 import { Keypair } from "@solana/web3.js";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Config } from "./config.ts";
 import { BUREAU_ADMIN_BASE } from "./config.ts";
 import { provisionStream, pushStreamCredentials } from "./asciinema.ts";
 import { IncusClient, IncusError, validateIncusName } from "./incus.ts";
+import { deliverNotice, ROOM_LABELS } from "./notifier.ts";
 import { generatePassword } from "./password.ts";
 import { archiveRecordings, bundleArchives, listRecordings, type RecordingInfo } from "./recordings.ts";
 import type { HostAgentState, ParticipantRecord } from "./state.ts";
@@ -31,6 +33,10 @@ function logStep(action: string, participant: string, detail?: string): void {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isMissingFile(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }
 
 function shellQuote(value: string): string {
@@ -155,7 +161,7 @@ export class ParticipantManager {
     return Number(output);
   }
 
-  private async configureIdentity(name: string, record: ParticipantRecord): Promise<void> {
+  private async configureIdentity(name: string, record: ParticipantRecord, warnings: string[]): Promise<void> {
     logStep("set-password", name);
     await this.incus.exec(name, ["chpasswd"], { input: `operative:${record.password}\n` });
     const uid = await this.operativeUid(name);
@@ -186,6 +192,19 @@ export class ParticipantManager {
     await this.incus.filePushContent(environment, name, "/home/operative/.bureau-env", 0o600, uid);
     await this.incus.exec(name, ["chown", "operative:operative", "/home/operative/.bureau-env"]);
 
+    const guideSource = join(this.config.contentDir, "PLAYERS_GUIDE.md");
+    try {
+      const guide = await readFile(guideSource, "utf8");
+      logStep("push-players-guide", name);
+      await this.incus.filePushContent(guide, name, "/home/operative/PLAYERS_GUIDE.md", 0o644, uid);
+      await this.incus.exec(name, ["chown", "operative:operative", "/home/operative/PLAYERS_GUIDE.md"]);
+    } catch (error) {
+      if (!isMissingFile(error)) throw error;
+      const warning = `players guide source missing: ${guideSource}`;
+      warnings.push(warning);
+      logStep("push-players-guide-skipped", name, warning);
+    }
+
     if (record.authorizedKey) {
       logStep("push-authorized-key", name);
       await this.incus.exec(name, ["install", "-d", "-m", "0700", "-o", "operative", "-g", "operative", "/home/operative/.ssh"]);
@@ -194,7 +213,7 @@ export class ParticipantManager {
     }
   }
 
-  private async createContainer(name: string, record: ParticipantRecord): Promise<void> {
+  private async createContainer(name: string, record: ParticipantRecord, warnings: string[]): Promise<void> {
     logStep("copy-template", name);
     await this.incus.copy("p-template", name);
     logStep("set-static-ip", name, record.ip);
@@ -203,7 +222,7 @@ export class ParticipantManager {
     await this.incus.start(name);
     await this.waitForRunning(name);
     await this.waitForAgent(name);
-    await this.configureIdentity(name, record);
+    await this.configureIdentity(name, record, warnings);
     logStep("add-ssh-proxy", name, String(record.sshPort));
     await this.incus.deviceAdd(name, `ssh-${name}`, record.sshPort);
   }
@@ -231,6 +250,24 @@ export class ParticipantManager {
       if (!response.ok) throw new Error(`bureau-api returned ${response.status}`);
     } catch (error) {
       warnings.push(`bureau-api operative registration failed: ${errorMessage(error)}`);
+    }
+  }
+
+  private async deregisterOperative(record: ParticipantRecord, warnings: string[]): Promise<void> {
+    logStep("deregister-operative", participantName(record.n));
+    try {
+      const response = await fetchWithTimeout(
+        `${BUREAU_ADMIN_BASE}/operatives/${encodeURIComponent(record.operativeId)}`,
+        {
+          method: "DELETE",
+          headers: {
+            authorization: `Bearer ${this.config.adminToken}`,
+          },
+        },
+      );
+      if (!response.ok && response.status !== 404) throw new Error(`bureau-api returned ${response.status}`);
+    } catch (error) {
+      warnings.push(`bureau-api operative deregistration failed: ${errorMessage(error)}`);
     }
   }
 
@@ -276,7 +313,7 @@ export class ParticipantManager {
       };
       const warnings: string[] = [];
       try {
-        await this.createContainer(name, record);
+        await this.createContainer(name, record, warnings);
         await this.registerOperative(record, warnings);
         await this.provisionStreamToken(name, record, warnings);
         state.participants[name] = record;
@@ -366,6 +403,23 @@ export class ParticipantManager {
     }
   }
 
+  private async deliverRoomNotice(name: string, room: Room, warnings: string[]): Promise<void> {
+    try {
+      const brief = await readFile(join(this.config.contentDir, "rooms", room, "BRIEF.md"), "utf8");
+      const text = [
+        "=== BUREAU NOTIFICATION ===",
+        `${ROOM_LABELS[room] ?? room} — ROOM REVEALED`,
+        `Brief installed at ~/bureau/rooms/${room}/BRIEF.md`,
+        "",
+        brief,
+      ].join("\n");
+      logStep("deliver-room-notice", name, room);
+      await deliverNotice(this.incus.exec.bind(this.incus), name, text);
+    } catch (error) {
+      warnings.push(`room notice delivery failed: ${errorMessage(error)}`);
+    }
+  }
+
   async reveal(name: string, room: Room): Promise<ParticipantView> {
     return this.mutate(async () => {
       parseParticipantName(name);
@@ -377,6 +431,7 @@ export class ParticipantManager {
       // bureau-api reveal for this operative.
       try {
         await this.pushRoom(name, room);
+        await this.deliverRoomNotice(name, room, warnings);
       } catch (error) {
         warnings.push(`room brief push failed: ${errorMessage(error)}`);
       }
@@ -429,7 +484,7 @@ export class ParticipantManager {
       });
       await this.incus.delete(name, true);
       try {
-        await this.createContainer(name, record);
+        await this.createContainer(name, record, warnings);
         if (record.installId && record.asciinemaToken) {
           try {
             await pushStreamCredentials(this.incus, name, record.installId, record.asciinemaToken);
@@ -440,6 +495,7 @@ export class ParticipantManager {
         await this.registerOperative(record, warnings);
         for (const room of rooms) {
           await this.pushRoom(name, room);
+          await this.deliverRoomNotice(name, room, warnings);
           await this.notifyReveal(record, room, warnings);
         }
         record.status = "Running";
@@ -453,22 +509,24 @@ export class ParticipantManager {
     });
   }
 
-  async remove(name: string): Promise<{ name: string; removed: true }> {
+  async remove(name: string): Promise<{ name: string; removed: true; warnings: string[] }> {
     return this.mutate(async () => {
       parseParticipantName(name);
       const state = await this.stateStore.load();
       const record = state.participants[name];
       if (!record) throw new ParticipantError("participant not found", 404);
+      const warnings: string[] = [];
       logStep("remove-proxy", name);
       await this.incus.deviceRemove(name, `ssh-${name}`).catch((error: unknown) => {
         if (!(error instanceof IncusError)) throw error;
       });
       logStep("remove-container", name);
       await this.incus.delete(name, true);
+      await this.deregisterOperative(record, warnings);
       delete state.participants[name];
       state.apiKeysAssigned = state.apiKeysAssigned.filter((index) => index !== record.apiKeyIndex);
       await this.stateStore.save(state);
-      return { name, removed: true };
+      return { name, removed: true, warnings };
     });
   }
 }
