@@ -221,4 +221,87 @@ describe("BureauNotifier event stream", () => {
     expect(execCalls[0]?.input).not.toContain("1111");
     expect(cursorWrites).toEqual([1, 2]);
   });
+
+  test("adopts reset stream ids before delivering live events", async () => {
+    const payload = [
+      ...[1, 2, 3].map((id) => {
+        const replay = event({ id, data: { combo: String(id).repeat(4) } });
+        return `id: ${id}\nevent: combo.reveal\ndata: ${JSON.stringify(replay)}\n\n`;
+      }),
+      ": heartbeat\n\n",
+      `id: 4\nevent: override.granted\ndata: ${JSON.stringify(event({
+        id: 4,
+        type: "override.granted",
+        data: { combo: "4444" },
+      }))}\n\n`,
+    ].join("");
+    const fetchImpl = (async () => new Response(payload, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    })) as unknown as typeof fetch;
+    const { deps, execCalls, cursorWrites, logs } = notifierDeps({
+      fetchImpl,
+      readCursor: async () => 76,
+    });
+    let notifier: BureauNotifier;
+    deps.incusExec = async (container, argv, opts) => {
+      execCalls.push({ container, argv, input: opts.input });
+      notifier.stop();
+    };
+    notifier = new BureauNotifier(deps);
+
+    notifier.start();
+    for (let attempt = 0; attempt < 100 && cursorWrites.at(-1) !== 4; attempt += 1) {
+      await Bun.sleep(1);
+    }
+    notifier.stop();
+
+    expect(execCalls).toHaveLength(1);
+    expect(execCalls[0]?.input).toContain("MANUAL OVERRIDE");
+    expect(execCalls[0]?.input).toContain("4444");
+    expect(cursorWrites).toEqual([3, 4]);
+    expect(logs).toContainEqual({
+      component: "notify",
+      reset: "cursor-ahead-of-stream",
+      cursor: 76,
+      adopted: 3,
+    });
+  });
+
+  test("processes replay ids newer than a persisted cursor normally", async () => {
+    const payload = [
+      ...[1, 2, 3].map((id) => {
+        const replay = event({ id, data: { combo: String(id).repeat(4) } });
+        return `id: ${id}\nevent: combo.reveal\ndata: ${JSON.stringify(replay)}\n\n`;
+      }),
+      ": heartbeat\n\n",
+    ].join("");
+    const fetchImpl = (async () => new Response(payload, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    })) as unknown as typeof fetch;
+    const { deps, execCalls, cursorWrites, logs } = notifierDeps({
+      fetchImpl,
+      readCursor: async () => 2,
+    });
+    let notifier: BureauNotifier;
+    deps.incusExec = async (container, argv, opts) => {
+      execCalls.push({ container, argv, input: opts.input });
+      notifier.stop();
+    };
+    notifier = new BureauNotifier(deps);
+
+    notifier.start();
+    for (let attempt = 0; attempt < 100 && cursorWrites.at(-1) !== 3; attempt += 1) {
+      await Bun.sleep(1);
+    }
+    notifier.stop();
+
+    expect(execCalls).toHaveLength(1);
+    expect(execCalls[0]?.input).toContain("3333");
+    expect(execCalls[0]?.input).not.toContain("1111");
+    expect(execCalls[0]?.input).not.toContain("2222");
+    expect(cursorWrites).toEqual([3]);
+    expect(logs.some((entry) => entry.reset === "cursor-ahead-of-stream")).toBe(false);
+  });
 });

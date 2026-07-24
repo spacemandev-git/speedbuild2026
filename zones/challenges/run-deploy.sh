@@ -51,5 +51,6 @@ bun run src/10-mint-cred.ts
 bun run src/20-deploy-registry.ts
 bun run src/30-fund-and-seed.ts "${1:-/var/lib/bureau/operatives.json}"
 
-systemctl start bureau-api.service
+# restart, not start: a deploy over a running service must load the new code
+systemctl restart bureau-api.service
 echo "Bureau deployment complete; bureau-api.service is started."

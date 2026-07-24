@@ -228,6 +228,8 @@ export class BureauNotifier {
   private cursorInitialized = false;
   private seedMode = false;
   private seedMax: number | null = null;
+  private replayOpen = false;
+  private replayMax: number | null = null;
   private stopped = false;
   private abortController: AbortController | null = null;
   private loopPromise: Promise<void> | undefined;
@@ -303,7 +305,26 @@ export class BureauNotifier {
   private async processFrame(frame: string): Promise<void> {
     const lines = frame.split(/\r?\n/);
     if (lines.some((line) => line.startsWith(":"))) {
-      if (this.seedMode) await this.finalizeSeed();
+      if (this.replayOpen) {
+        this.replayOpen = false;
+        if (this.seedMode) {
+          await this.finalizeSeed();
+        } else if (
+          this.cursor !== null
+          && this.replayMax !== null
+          && this.replayMax < this.cursor
+        ) {
+          const cursor = this.cursor;
+          this.log({
+            component: "notify",
+            reset: "cursor-ahead-of-stream",
+            cursor,
+            adopted: this.replayMax,
+          });
+          this.cursor = this.replayMax;
+          await this.deps.writeCursor(this.replayMax);
+        }
+      }
       return;
     }
 
@@ -316,6 +337,10 @@ export class BureauNotifier {
       } else if (line.startsWith("data:")) {
         dataLines.push(line.slice(5).trimStart());
       }
+    }
+    if (this.replayOpen && frameId !== null) {
+      this.replayMax = Math.max(this.replayMax ?? frameId, frameId);
+      if (this.seedMode) this.seedMax = Math.max(this.seedMax ?? frameId, frameId);
     }
     if (dataLines.length === 0) return;
 
@@ -375,6 +400,8 @@ export class BureauNotifier {
         if (!response.ok) throw new Error(`bureau events request failed with status ${response.status}`);
         if (!response.body) throw new Error("bureau events response had no body");
 
+        this.replayOpen = true;
+        this.replayMax = null;
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
