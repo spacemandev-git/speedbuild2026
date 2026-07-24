@@ -1,13 +1,12 @@
 import { env } from '$env/dynamic/private';
 
 const HOST_AGENT_BASE = env.SB_HOST_AGENT_URL ?? 'http://10.61.0.1:7000';
-const EXECUTOR_ADMIN_BASE = env.SB_EXECUTOR_ADMIN_URL ?? 'http://10.61.0.20:8710';
-const EXECUTOR_PUBLIC_BASE = env.SB_EXECUTOR_PUBLIC_URL ?? 'http://10.61.0.20:8700';
+const BUREAU_ADMIN_BASE = env.SB_BUREAU_ADMIN_URL ?? 'http://10.61.0.20:8710';
+const BUREAU_PUBLIC_BASE = env.SB_BUREAU_PUBLIC_URL ?? 'http://10.61.0.20:8700';
 
 export type ParticipantRecord = {
   name: string;
-  claimNumber?: string;
-  claim_number?: string;
+  operativeId?: string;
   ip?: string;
   ipAddress?: string;
   sshPort?: number;
@@ -21,7 +20,7 @@ export type ParticipantRecord = {
   walletPublicKey?: string;
   solanaPubkey?: string;
   apiKey?: string;
-  estateApiKey?: string;
+  bureauApiKey?: string;
   streamToken?: string | null;
   asciinemaToken?: string | null;
   revealed?: Array<number | string>;
@@ -42,12 +41,13 @@ export type ZoneHealth = {
   [key: string]: unknown;
 };
 
-export type EstateEvent = {
+export type BureauEvent = {
+  id?: number;
   ts: string | number;
   type: string;
   room?: string | number;
-  claimNumber?: string;
-  message: string;
+  operativeId?: string;
+  message?: string;
   data?: unknown;
 };
 
@@ -57,15 +57,41 @@ export type RoomState = {
   [key: string]: unknown;
 };
 
-export type ClaimantState = {
-  claimNumber: string;
+export type OperativeProgress = {
+  operativeId: string;
   rooms: Record<string, RoomState>;
   [key: string]: unknown;
 };
 
-export type EstateState = {
-  claimants: ClaimantState[];
+export type LockRecord = {
+  room: 'room1' | 'room2';
+  lock: number;
+  members: string[];
+  liveOperative: string;
+  liveCode: string;
+};
+
+export type LocksPayload = {
+  pool: number;
+  locks: LockRecord[];
+};
+
+export type BureauState = {
+  operatives: OperativeProgress[];
+  reveals?: unknown[];
+  roomState?: unknown[];
+  recentEvents?: BureauEvent[];
+  roomsComplete?: string[];
+  locks?: LockRecord[] | LocksPayload;
+  room5Scoreboard?: unknown[];
   [key: string]: unknown;
+};
+
+type UnlockResult = {
+  ok: boolean;
+  combo?: string;
+  fragment?: string;
+  event?: BureauEvent;
 };
 
 type FetchOptions = Omit<RequestInit, 'body'> & { body?: unknown };
@@ -129,23 +155,23 @@ function stringValue(...values: unknown[]): string | undefined {
   return values.find((value): value is string => typeof value === 'string' && value.length > 0);
 }
 
-function normalizeState(payload: unknown): EstateState {
+function normalizeBureauState(payload: unknown): BureauState {
   const raw = objectValue(payload) ?? {};
-  const normalized = new Map<string, ClaimantState>();
+  const normalized = new Map<string, OperativeProgress>();
 
-  const ensureClaimant = (claimNumber: string): ClaimantState => {
-    const existing = normalized.get(claimNumber);
+  const ensureOperative = (operativeId: string): OperativeProgress => {
+    const existing = normalized.get(operativeId);
     if (existing) return existing;
-    const claimant: ClaimantState = { claimNumber, rooms: {} };
-    normalized.set(claimNumber, claimant);
-    return claimant;
+    const operative: OperativeProgress = { operativeId, rooms: {} };
+    normalized.set(operativeId, operative);
+    return operative;
   };
 
-  if (Array.isArray(raw.claimants)) {
-    for (const item of raw.claimants) {
+  if (Array.isArray(raw.operatives)) {
+    for (const item of raw.operatives) {
       const row = objectValue(item);
-      const claimNumber = row && stringValue(row.claimNumber, row.claim_number);
-      if (!row || !claimNumber) continue;
+      const operativeId = row && stringValue(row.operativeId, row.operative_id);
+      if (!row || !operativeId) continue;
 
       const rooms: Record<string, RoomState> = {};
       const rawRooms = objectValue(row.rooms);
@@ -157,30 +183,31 @@ function normalizeState(payload: unknown): EstateState {
             : { status: typeof value === 'string' ? value : 'unknown', detail: value };
         }
       }
-      if (typeof row.room1_status === 'string') rooms.room1 = { status: row.room1_status };
-      normalized.set(claimNumber, { ...row, claimNumber, rooms } as ClaimantState);
+      const room1Status = stringValue(row.room1Status, row.room1_status);
+      if (room1Status) rooms.room1 = { status: room1Status };
+      normalized.set(operativeId, { ...row, operativeId, rooms } as OperativeProgress);
     }
   }
 
   if (Array.isArray(raw.reveals)) {
     for (const item of raw.reveals) {
       const row = objectValue(item);
-      const claimNumber = row && stringValue(row.claimNumber, row.claim_number);
+      const operativeId = row && stringValue(row.operativeId, row.operative_id);
       const room = row && stringValue(row.room);
-      if (!row || !claimNumber || !room) continue;
-      const claimant = ensureClaimant(claimNumber);
-      claimant.rooms[room] ??= { status: 'revealed', detail: row };
+      if (!row || !operativeId || !room) continue;
+      const operative = ensureOperative(operativeId);
+      operative.rooms[room] ??= { status: 'revealed', detail: row };
     }
   }
 
   if (Array.isArray(raw.roomState)) {
     for (const item of raw.roomState) {
       const row = objectValue(item);
-      const claimNumber = row && stringValue(row.claimNumber, row.claim_number);
+      const operativeId = row && stringValue(row.operativeId, row.operative_id);
       const room = row && stringValue(row.room);
-      if (!row || !claimNumber || !room) continue;
-      const claimant = ensureClaimant(claimNumber);
-      const current = claimant.rooms[room];
+      if (!row || !operativeId || !room) continue;
+      const operative = ensureOperative(operativeId);
+      const current = operative.rooms[room];
       const value = row.value;
       const valueObject = objectValue(value);
       const status = stringValue(
@@ -190,14 +217,14 @@ function normalizeState(payload: unknown): EstateState {
         'in-progress'
       )!;
       const details = objectValue(current?.detail) ?? {};
-      claimant.rooms[room] = {
+      operative.rooms[room] = {
         status,
         detail: { ...details, [stringValue(row.key) ?? 'state']: value }
       };
     }
   }
 
-  return { ...raw, claimants: [...normalized.values()] } as EstateState;
+  return { ...raw, operatives: [...normalized.values()] } as BureauState;
 }
 
 function roomId(room: number): string {
@@ -256,35 +283,55 @@ export const hostAgent = {
   }
 };
 
-export const executorAdmin = {
-  async state(): Promise<EstateState> {
+export const bureauAdmin = {
+  async state(): Promise<BureauState> {
     const payload = await request<unknown>(
-      EXECUTOR_ADMIN_BASE,
+      BUREAU_ADMIN_BASE,
       required('SB_ADMIN_TOKEN'),
       '/state'
     );
-    return normalizeState(payload);
+    return normalizeBureauState(payload);
   },
 
-  mercy(claimNumber: string, room: number): Promise<{ combo?: string; fragment?: string; [key: string]: unknown }> {
-    return request(EXECUTOR_ADMIN_BASE, required('SB_ADMIN_TOKEN'), '/mercy', {
+  locks(): Promise<LocksPayload> {
+    return request(BUREAU_ADMIN_BASE, required('SB_ADMIN_TOKEN'), '/locks');
+  },
+
+  override(operativeId: string, room: number): Promise<UnlockResult> {
+    return request(BUREAU_ADMIN_BASE, required('SB_ADMIN_TOKEN'), '/override', {
       method: 'POST',
-      body: { claimNumber, room: roomId(room) }
+      body: { operativeId, room: roomId(room) }
+    });
+  },
+
+  forceComplete(operativeId: string, room: number): Promise<UnlockResult> {
+    return request(BUREAU_ADMIN_BASE, required('SB_ADMIN_TOKEN'), '/force-complete', {
+      method: 'POST',
+      body: { operativeId, room: roomId(room) }
+    });
+  },
+
+  completeRoom(room: number): Promise<{ ok: boolean; room: string }> {
+    return request(
+      BUREAU_ADMIN_BASE,
+      required('SB_ADMIN_TOKEN'),
+      `/rooms/${encodeSegment(roomId(room))}/complete`,
+      { method: 'POST' }
+    );
+  }
+};
+
+export const bureauPublic = {
+  configureRoom3(config: { participants: string[]; selected: string[] }): Promise<{ ok: boolean; configured: boolean }> {
+    return request(BUREAU_PUBLIC_BASE, required('SB_ADMIN_TOKEN'), '/fragment/config', {
+      method: 'POST',
+      body: { participants: config.participants, bought: config.selected }
     });
   }
 };
 
-export const executorPublic = {
-  beginSeance(config: { participants: string[]; bought: string[] }): Promise<{ ok: boolean; configured: boolean }> {
-    return request(EXECUTOR_PUBLIC_BASE, required('SB_ADMIN_TOKEN'), '/fragment/config', {
-      method: 'POST',
-      body: config
-    });
-  }
-};
-
-export function fetchExecutorEvents(signal?: AbortSignal): Promise<Response> {
-  return fetch(`${EXECUTOR_ADMIN_BASE}/events`, {
+export function fetchBureauEvents(signal?: AbortSignal): Promise<Response> {
+  return fetch(`${BUREAU_ADMIN_BASE}/events`, {
     headers: {
       accept: 'text/event-stream',
       authorization: `Bearer ${required('SB_ADMIN_TOKEN')}`

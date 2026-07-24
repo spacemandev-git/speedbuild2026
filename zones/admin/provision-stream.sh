@@ -33,7 +33,7 @@ server_service=asciinema
 release=/opt/app/bin/asciinema
 
 primary_rpc=$(cat <<EOF
-{:ok, u} = Asciinema.Accounts.create_user(%{username: "${username}", email: "${username}@estate.local"})
+{:ok, u} = Asciinema.Accounts.create_user(%{username: "${username}", email: "${username}@bureau.local"})
 {:ok, _} = Asciinema.Accounts.claim_cli(u, "${install_id}")
 {:ok, s} = Asciinema.Streaming.create_stream(u, %{visibility: :unlisted})
 IO.puts(s.public_token <> " " <> s.producer_token)
@@ -41,7 +41,7 @@ EOF
 )
 
 fallback_rpc=$(cat <<EOF
-case Asciinema.Accounts.create_user(%{username: "${username}", email: "${username}@estate.local"}) do
+case Asciinema.Accounts.create_user(%{username: "${username}", email: "${username}@bureau.local"}) do
   {:ok, u} ->
     {:ok, _} = Asciinema.Accounts.claim_cli(u, "${install_id}")
     {:ok, s} = Asciinema.Streaming.create_stream(u, %{visibility: :unlisted})

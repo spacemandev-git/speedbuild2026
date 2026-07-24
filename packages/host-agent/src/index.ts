@@ -3,9 +3,9 @@ import { readFile, rename, writeFile } from "node:fs/promises";
 import { Hono } from "hono";
 import type { Context } from "hono";
 import type { Config } from "./config.ts";
-import { EXECUTOR_ADMIN_BASE, HOST_AGENT_HOST, HOST_AGENT_PORT, loadConfig } from "./config.ts";
+import { BUREAU_ADMIN_BASE, HOST_AGENT_HOST, HOST_AGENT_PORT, loadConfig } from "./config.ts";
 import { IncusClient, IncusError } from "./incus.ts";
-import { EstateNotifier } from "./notifier.ts";
+import { BureauNotifier } from "./notifier.ts";
 import { isRoom, ParticipantError, ParticipantManager } from "./participants.ts";
 import { StateStore } from "./state.ts";
 import { ZoneMonitor } from "./zones.ts";
@@ -117,7 +117,7 @@ export function createApp(config: Config, participants: ParticipantManager, zone
   app.post("/participants/:name/reveal", async (context) => {
     const body = await jsonObject(context);
     if (typeof body.room !== "string" || !isRoom(body.room)) {
-      throw new ParticipantError("invalid room", 400, "expected room1..room5 or bonus");
+      throw new ParticipantError("invalid room", 400, "expected room1..room5");
     }
     return context.json(await participants.reveal(context.req.param("name"), body.room));
   });
@@ -172,9 +172,9 @@ export function startServer(config = loadConfig()): Bun.Server<unknown> {
 
   try {
     const cursorPath = `${config.statePath}.notify-cursor`;
-    const notifier = new EstateNotifier({
-      eventsUrl: `${EXECUTOR_ADMIN_BASE}/events`,
-      stateUrl: `${EXECUTOR_ADMIN_BASE}/state`,
+    const notifier = new BureauNotifier({
+      eventsUrl: `${BUREAU_ADMIN_BASE}/events`,
+      stateUrl: `${BUREAU_ADMIN_BASE}/state`,
       adminToken: config.adminToken,
       incusExec: (container, argv, options) => incus.exec(container, argv, options),
       loadParticipants: async () => (await stateStore.load()).participants,

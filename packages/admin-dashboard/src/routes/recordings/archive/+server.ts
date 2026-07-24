@@ -15,7 +15,7 @@ export const GET: RequestHandler = async () => {
   return new Response(upstream.body, {
     headers: {
       'content-type': upstream.headers.get('content-type') ?? 'application/x-tar',
-      'content-disposition': upstream.headers.get('content-disposition') ?? 'attachment; filename="estate-recordings.tar"',
+      'content-disposition': upstream.headers.get('content-disposition') ?? 'attachment; filename="bureau-recordings.tar"',
       'cache-control': 'no-store'
     }
   });

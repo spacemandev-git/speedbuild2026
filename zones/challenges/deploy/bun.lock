@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "estate-deploy",
+      "name": "bureau-deploy",
       "dependencies": {
         "@coral-xyz/anchor": "latest",
         "@solana/spl-token": "latest",

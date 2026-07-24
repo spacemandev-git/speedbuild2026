@@ -7,7 +7,7 @@
 
   const navigation = [
     { href: '/', label: 'Overview' },
-    { href: '/participants', label: 'Claimants' },
+    { href: '/participants', label: 'Operatives' },
     { href: '/live', label: 'Live wall' },
     { href: '/challenges', label: 'Rooms' },
     { href: '/recordings', label: 'Recordings' }
@@ -19,8 +19,8 @@
 </script>
 
 <svelte:head>
-  <title>The Estate · Operations</title>
-  <meta name="description" content="Speedbuild Estate show operations console" />
+  <title>The Bureau · Operations</title>
+  <meta name="description" content="Speed Build Bureau operations console" />
 </svelte:head>
 
 {#if page.url.pathname === '/login'}
@@ -29,11 +29,11 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="/">
-        <span class="brand-mark">E</span>
-        <span><strong>THE ESTATE</strong><small>show operations</small></span>
+        <span class="brand-mark">B</span>
+        <span><strong>THE BUREAU</strong><small>operations</small></span>
       </a>
       <nav aria-label="Primary navigation">
-        {#each navigation as item}
+        {#each navigation as item (item.href)}
           <a href={item.href} class:active={active(item.href)}>{item.label}</a>
         {/each}
       </nav>

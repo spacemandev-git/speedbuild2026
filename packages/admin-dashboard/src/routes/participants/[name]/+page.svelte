@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import LiveTerminal from '$lib/components/LiveTerminal.svelte';
   import {
     participantApiKey,
-    participantClaim,
+    participantOperativeId,
     participantIp,
     participantPassword,
     participantPublicKey,
@@ -15,20 +16,22 @@
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
-  // svelte-ignore state_referenced_locally -- seed value only; user may edit the host field
-  let sshHost = $state(participantIp(data.participant));
 
   const revealed = $derived(participantRooms(data.participant));
   const warnings = $derived(participantWarnings(data.participant));
+  const sshHost = $derived(browser ? window.location.hostname : participantIp(data.participant));
+  const rooms = [
+    { number: 1, label: 'Room 1 — Operation' },
+    { number: 2, label: 'Room 2 — Assembly' },
+    { number: 3, label: 'Room 3 — Trust' },
+    { number: 4, label: 'Room 4 — Minesweeper' },
+    { number: 5, label: 'Room 5 — Memory Path' }
+  ];
   const sshCommand = $derived(
     participantSshPort(data.participant)
-      ? `ssh -p ${participantSshPort(data.participant)} claimant@${sshHost}`
-      : `ssh claimant@${sshHost}`
+      ? `ssh -p ${participantSshPort(data.participant)} operative@${sshHost}`
+      : `ssh operative@${sshHost}`
   );
-
-  $effect(() => {
-    sshHost = window.location.hostname;
-  });
 
   function isRevealed(room: number): boolean {
     return revealed.some((value) => value === String(room) || value === `room${room}` || value === `room-${room}`);
@@ -39,11 +42,11 @@
   }
 </script>
 
-<svelte:head><title>{data.participant.name} · The Estate</title></svelte:head>
+<svelte:head><title>{data.participant.name} · The Bureau</title></svelte:head>
 
 <div class="page-header">
   <div>
-    <p class="eyebrow">{participantClaim(data.participant)}</p>
+    <p class="eyebrow">{participantOperativeId(data.participant)}</p>
     <h1>{data.participant.name}</h1>
     <p>{participantIp(data.participant)} · SSH {participantSshPort(data.participant) ?? 'unassigned'} · {participantStatus(data.participant)}</p>
   </div>
@@ -68,29 +71,29 @@
 <div class="grid detail-grid">
   <div class="grid">
     <section class="panel">
-      <div class="panel-heading"><div><p class="eyebrow">Entrusted secrets</p><h2>Credentials</h2></div></div>
+      <div class="panel-heading"><div><p class="eyebrow">Access credentials</p><h2>Credentials</h2></div></div>
       <dl class="credential-list">
         <div><dt>SSH command</dt><dd>{sshCommand}</dd></div>
         <div><dt>Password</dt><dd>{participantPassword(data.participant) ?? 'not retained'}</dd></div>
         <div><dt>Wallet public key</dt><dd>{participantPublicKey(data.participant) ?? 'not reported'}</dd></div>
-        <div><dt>Estate API key</dt><dd>{participantApiKey(data.participant) ?? 'not reported'}</dd></div>
+        <div><dt>Bureau API key</dt><dd>{participantApiKey(data.participant) ?? 'not reported'}</dd></div>
       </dl>
       {#if warnings.length > 0}
-        <ul class="warning-list">{#each warnings as warning}<li>{warning}</li>{/each}</ul>
+        <ul class="warning-list">{#each warnings as warning, index (`${warning}-${index}`)}<li>{warning}</li>{/each}</ul>
       {/if}
     </section>
 
     <section class="panel">
-      <div class="panel-heading"><div><p class="eyebrow">Clause access</p><h2>Revealed rooms</h2></div></div>
+      <div class="panel-heading"><div><p class="eyebrow">Room access</p><h2>Revealed rooms</h2></div></div>
       <div class="pill-list">
-        {#each revealed as room}<span class="pill good">{room}</span>{/each}
+        {#each revealed as room (room)}<span class="pill good">{room}</span>{/each}
         {#if revealed.length === 0}<span class="muted-copy">No room briefs have been delivered.</span>{/if}
       </div>
       <div class="room-actions">
-        {#each [1, 2, 3, 4, 5] as room}
+        {#each rooms as room (room.number)}
           <form method="POST" action="?/reveal">
-            <input type="hidden" name="room" value={room} />
-            <button class="button small" type="submit" disabled={isRevealed(room)}>Room {room}</button>
+            <input type="hidden" name="room" value={room.number} />
+            <button class="button small" type="submit" disabled={isRevealed(room.number)}>{room.label}</button>
           </form>
         {/each}
       </div>

@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 
 export interface ParticipantRecord {
   n: number;
-  claimNumber: string;
+  operativeId: string;
   ip: string;
   sshPort: number;
   password: string;

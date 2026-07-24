@@ -1,5 +1,5 @@
 /**
- * Build/deploy estate_registry and initialize its Config PDA once.
+ * Build/deploy bureau_registry and initialize its Config PDA once.
  * Usage: bun run src/20-deploy-registry.ts [--help]
  */
 
@@ -16,9 +16,9 @@ import {
   RPC_URL,
 } from "./lib";
 
-const REGISTRY_DIR = "/opt/packages/estate-registry";
-const PROGRAM_SO = `${REGISTRY_DIR}/target/deploy/estate_registry.so`;
-const PROGRAM_KEYPAIR = `${REGISTRY_DIR}/target/deploy/estate_registry-keypair.json`;
+const REGISTRY_DIR = "/opt/packages/bureau-registry";
+const PROGRAM_SO = `${REGISTRY_DIR}/target/deploy/bureau_registry.so`;
+const PROGRAM_KEYPAIR = `${REGISTRY_DIR}/target/deploy/bureau_registry-keypair.json`;
 
 function run(command: string[], cwd: string): void {
   const result = Bun.spawnSync(command, {
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
   if (isHelpRequest()) {
     console.log(
       "Usage: bun run src/20-deploy-registry.ts\n" +
-        "Builds estate_registry when needed, deploys it to local Surfpool, and initializes Config.",
+        "Builds bureau_registry when needed, deploys it to local Surfpool, and initializes Config.",
     );
     return;
   }
@@ -82,7 +82,7 @@ async function main(): Promise<void> {
       `${programKeypair.publicKey} exists but is not an executable program account`,
     );
   } else {
-    console.log(`estate_registry already deployed at ${programKeypair.publicKey}`);
+    console.log(`bureau_registry already deployed at ${programKeypair.publicKey}`);
   }
 
   const deployer = await loadKeypair();

@@ -109,8 +109,8 @@ for zone in admin challenges inference; do
   sb_push_tree "${zone}" "${SB_REPO_ROOT}/zones/${zone}" /opt/zone
 done
 
-sb_push_tree challenges "${SB_REPO_ROOT}/packages/executor-api" /opt/packages/executor-api
-sb_push_tree challenges "${SB_REPO_ROOT}/packages/estate-registry" /opt/packages/estate-registry
+sb_push_tree challenges "${SB_REPO_ROOT}/packages/bureau-api" /opt/packages/bureau-api
+sb_push_tree challenges "${SB_REPO_ROOT}/packages/bureau-registry" /opt/packages/bureau-registry
 sb_push_tree admin "${SB_REPO_ROOT}/packages/admin-dashboard" /opt/packages/admin-dashboard
 
 for zone in admin challenges inference; do

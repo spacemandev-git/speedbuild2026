@@ -3,15 +3,15 @@ set -euo pipefail
 
 ZONE_DIR=/opt/zone
 RPC_URL=${RPC_URL:-http://127.0.0.1:8899}
-ESTATE_DEPLOYER=${ESTATE_DEPLOYER:-/var/lib/estate/deployer.json}
+BUREAU_DEPLOYER=${BUREAU_DEPLOYER:-/var/lib/bureau/deployer.json}
 
 if [[ ${1:-} == "--help" || ${1:-} == "-h" ]]; then
   cat <<'EOF'
-Usage: /opt/zone/run-deploy.sh [claimants.json]
+Usage: /opt/zone/run-deploy.sh [operatives.json]
 
-Installs deploy-package dependencies, ensures the SPL programs and SCRIP mint,
-deploys/initializes estate_registry, seeds optional claimants and teams, then
-starts executor-api. The default seed file is /var/lib/estate/claimants.json.
+Installs deploy-package dependencies, ensures the SPL programs and CRED mint,
+deploys and initializes bureau_registry, seeds optional operatives, then starts
+bureau-api. The default seed file is /var/lib/bureau/operatives.json.
 EOF
   exit 0
 fi
@@ -29,7 +29,7 @@ if [[ -f /etc/speedbuild.env ]]; then
   set +a
 fi
 
-export RPC_URL ESTATE_DEPLOYER
+export RPC_URL BUREAU_DEPLOYER
 
 for attempt in {1..30}; do
   if curl -fsS -X POST -H 'content-type: application/json' \
@@ -47,9 +47,9 @@ done
 cd "${ZONE_DIR}/deploy"
 bun install
 bun run src/00-ensure-spl.ts
-bun run src/10-mint-scrip.ts
+bun run src/10-mint-cred.ts
 bun run src/20-deploy-registry.ts
-bun run src/30-fund-and-seed.ts "${1:-/var/lib/estate/claimants.json}"
+bun run src/30-fund-and-seed.ts "${1:-/var/lib/bureau/operatives.json}"
 
-systemctl start executor-api.service
-echo "Estate deployment complete; executor-api.service is started."
+systemctl start bureau-api.service
+echo "Bureau deployment complete; bureau-api.service is started."

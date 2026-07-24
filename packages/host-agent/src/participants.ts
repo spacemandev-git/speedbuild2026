@@ -1,7 +1,7 @@
 import { Keypair } from "@solana/web3.js";
 import { join } from "node:path";
 import type { Config } from "./config.ts";
-import { EXECUTOR_ADMIN_BASE } from "./config.ts";
+import { BUREAU_ADMIN_BASE } from "./config.ts";
 import { provisionStream, pushStreamCredentials } from "./asciinema.ts";
 import { IncusClient, IncusError, validateIncusName } from "./incus.ts";
 import { generatePassword } from "./password.ts";
@@ -9,7 +9,7 @@ import { archiveRecordings, bundleArchives, listRecordings, type RecordingInfo }
 import type { HostAgentState, ParticipantRecord } from "./state.ts";
 import { StateStore } from "./state.ts";
 
-export const ROOMS = ["room1", "room2", "room3", "room4", "room5", "bonus"] as const;
+export const ROOMS = ["room1", "room2", "room3", "room4", "room5"] as const;
 export type Room = (typeof ROOMS)[number];
 
 export interface ParticipantView extends ParticipantRecord {
@@ -52,9 +52,9 @@ export function participantName(n: number): string {
   return `p${String(n).padStart(2, "0")}`;
 }
 
-export function claimNumber(n: number): string {
+export function operativeId(n: number): string {
   if (!Number.isInteger(n) || n < 1 || n > 99) throw new Error("participant number must be between 1 and 99");
-  return `CLAIMANT-${String(n).padStart(2, "0")}`;
+  return `OPERATIVE-${String(n).padStart(2, "0")}`;
 }
 
 export function parseParticipantName(name: string): number {
@@ -97,7 +97,7 @@ export class ParticipantManager {
   }
 
   private sshCommand(record: ParticipantRecord): string {
-    return `ssh claimant@${this.config.hostLanHint} -p ${record.sshPort}`;
+    return `ssh operative@${this.config.hostLanHint} -p ${record.sshPort}`;
   }
 
   private view(name: string, record: ParticipantRecord, warnings: string[] = []): ParticipantView {
@@ -149,33 +149,33 @@ export class ParticipantManager {
     throw new Error(`timed out waiting for ${name} agent readiness: ${lastError}`);
   }
 
-  private async claimantUid(name: string): Promise<number> {
-    const output = await this.incus.exec(name, ["id", "-u", "claimant"]);
-    if (!/^\d+$/.test(output)) throw new Error(`invalid claimant uid returned by ${name}`);
+  private async operativeUid(name: string): Promise<number> {
+    const output = await this.incus.exec(name, ["id", "-u", "operative"]);
+    if (!/^\d+$/.test(output)) throw new Error(`invalid operative uid returned by ${name}`);
     return Number(output);
   }
 
   private async configureIdentity(name: string, record: ParticipantRecord): Promise<void> {
     logStep("set-password", name);
-    await this.incus.exec(name, ["chpasswd"], { input: `claimant:${record.password}\n` });
-    const uid = await this.claimantUid(name);
+    await this.incus.exec(name, ["chpasswd"], { input: `operative:${record.password}\n` });
+    const uid = await this.operativeUid(name);
 
     logStep("push-solana-keypair", name);
-    await this.incus.exec(name, ["install", "-d", "-m", "0700", "-o", "claimant", "-g", "claimant", "/home/claimant/.config/solana"]);
+    await this.incus.exec(name, ["install", "-d", "-m", "0700", "-o", "operative", "-g", "operative", "/home/operative/.config/solana"]);
     await this.incus.filePushContent(
       `${JSON.stringify(record.solanaSecretKey)}\n`,
       name,
-      "/home/claimant/.config/solana/id.json",
+      "/home/operative/.config/solana/id.json",
       0o600,
       uid,
     );
-    await this.incus.exec(name, ["chown", "claimant:claimant", "/home/claimant/.config/solana/id.json"]);
+    await this.incus.exec(name, ["chown", "operative:operative", "/home/operative/.config/solana/id.json"]);
 
-    logStep("push-estate-env", name);
+    logStep("push-bureau-env", name);
     const environment = [
-      `export ESTATE_API_KEY=${shellQuote(record.apiKey)}`,
-      `export CLAIM_NUMBER=${shellQuote(record.claimNumber)}`,
-      "export SOLANA_KEYPAIR=/home/claimant/.config/solana/id.json",
+      `export BUREAU_API_KEY=${shellQuote(record.apiKey)}`,
+      `export OPERATIVE_ID=${shellQuote(record.operativeId)}`,
+      "export SOLANA_KEYPAIR=/home/operative/.config/solana/id.json",
       // Shared OpenRouter key powering the GLM 5.2 backup provider in
       // opencode.json. Only emitted when configured on the host.
       ...(this.config.sunburstOrKey
@@ -183,14 +183,14 @@ export class ParticipantManager {
         : []),
       "",
     ].join("\n");
-    await this.incus.filePushContent(environment, name, "/home/claimant/.estate-env", 0o600, uid);
-    await this.incus.exec(name, ["chown", "claimant:claimant", "/home/claimant/.estate-env"]);
+    await this.incus.filePushContent(environment, name, "/home/operative/.bureau-env", 0o600, uid);
+    await this.incus.exec(name, ["chown", "operative:operative", "/home/operative/.bureau-env"]);
 
     if (record.authorizedKey) {
       logStep("push-authorized-key", name);
-      await this.incus.exec(name, ["install", "-d", "-m", "0700", "-o", "claimant", "-g", "claimant", "/home/claimant/.ssh"]);
-      await this.incus.filePushContent(`${record.authorizedKey}\n`, name, "/home/claimant/.ssh/authorized_keys", 0o600, uid);
-      await this.incus.exec(name, ["chown", "claimant:claimant", "/home/claimant/.ssh/authorized_keys"]);
+      await this.incus.exec(name, ["install", "-d", "-m", "0700", "-o", "operative", "-g", "operative", "/home/operative/.ssh"]);
+      await this.incus.filePushContent(`${record.authorizedKey}\n`, name, "/home/operative/.ssh/authorized_keys", 0o600, uid);
+      await this.incus.exec(name, ["chown", "operative:operative", "/home/operative/.ssh/authorized_keys"]);
     }
   }
 
@@ -217,20 +217,20 @@ export class ParticipantManager {
     return { index, apiKey };
   }
 
-  private async registerClaimant(record: ParticipantRecord, warnings: string[]): Promise<void> {
-    logStep("register-claimant", participantName(record.n));
+  private async registerOperative(record: ParticipantRecord, warnings: string[]): Promise<void> {
+    logStep("register-operative", participantName(record.n));
     try {
-      const response = await fetchWithTimeout(`${EXECUTOR_ADMIN_BASE}/claimants`, {
+      const response = await fetchWithTimeout(`${BUREAU_ADMIN_BASE}/operatives`, {
         method: "POST",
         headers: {
           authorization: `Bearer ${this.config.adminToken}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ claimNumber: record.claimNumber, pubkey: record.solanaPubkey }),
+        body: JSON.stringify({ operativeId: record.operativeId, pubkey: record.solanaPubkey }),
       });
-      if (!response.ok) throw new Error(`executor-api returned ${response.status}`);
+      if (!response.ok) throw new Error(`bureau-api returned ${response.status}`);
     } catch (error) {
-      warnings.push(`executor-api claimant registration failed: ${errorMessage(error)}`);
+      warnings.push(`bureau-api operative registration failed: ${errorMessage(error)}`);
     }
   }
 
@@ -257,7 +257,7 @@ export class ParticipantManager {
       const validatedAuthorizedKey = authorizedKey === undefined ? undefined : validateAuthorizedKey(authorizedKey);
       const record: ParticipantRecord = {
         n,
-        claimNumber: claimNumber(n),
+        operativeId: operativeId(n),
         ip: `${this.config.subnetPrefix}.${100 + n}`,
         sshPort: this.config.sshPortBase + n,
         password: generatePassword(),
@@ -277,7 +277,7 @@ export class ParticipantManager {
       const warnings: string[] = [];
       try {
         await this.createContainer(name, record);
-        await this.registerClaimant(record, warnings);
+        await this.registerOperative(record, warnings);
         await this.provisionStreamToken(name, record, warnings);
         state.participants[name] = record;
         state.apiKeysAssigned = [...new Set([...state.apiKeysAssigned, index])].sort((a, b) => a - b);
@@ -339,30 +339,30 @@ export class ParticipantManager {
     if (entries.length === 0) {
       throw new ParticipantError("no recordings", 404, "no participant has session recordings");
     }
-    return { filename: "estate-recordings.tar", bytes: await bundleArchives(entries) };
+    return { filename: "bureau-recordings.tar", bytes: await bundleArchives(entries) };
   }
 
   private async pushRoom(name: string, room: Room): Promise<void> {
     const source = join(this.config.contentDir, "rooms", room, "/");
-    const destination = `/home/claimant/estate/rooms/${room}/`;
+    const destination = `/home/operative/bureau/rooms/${room}/`;
     logStep("push-room", name, room);
     await this.incus.filePush(source, name, destination, { recursive: true });
-    await this.incus.exec(name, ["chown", "-R", "claimant:claimant", destination]);
+    await this.incus.exec(name, ["chown", "-R", "operative:operative", destination]);
   }
 
   private async notifyReveal(record: ParticipantRecord, room: Room, warnings: string[]): Promise<void> {
     try {
-      const response = await fetchWithTimeout(`${EXECUTOR_ADMIN_BASE}/reveal`, {
+      const response = await fetchWithTimeout(`${BUREAU_ADMIN_BASE}/reveal`, {
         method: "POST",
         headers: {
           authorization: `Bearer ${this.config.adminToken}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ claimNumber: record.claimNumber, room }),
+        body: JSON.stringify({ operativeId: record.operativeId, room }),
       });
-      if (!response.ok) throw new Error(`executor-api returned ${response.status}`);
+      if (!response.ok) throw new Error(`bureau-api returned ${response.status}`);
     } catch (error) {
-      warnings.push(`executor-api reveal failed: ${errorMessage(error)}`);
+      warnings.push(`bureau-api reveal failed: ${errorMessage(error)}`);
     }
   }
 
@@ -373,12 +373,12 @@ export class ParticipantManager {
       const record = state.participants[name];
       if (!record) throw new ParticipantError("participant not found", 404);
       const warnings: string[] = [];
-      // The clause brief is a convenience file; a push failure must not block the
-      // executor-api reveal that actually unseals the clause for this claimant.
+      // The room brief is a convenience file; a push failure must not block the
+      // bureau-api reveal for this operative.
       try {
         await this.pushRoom(name, room);
       } catch (error) {
-        warnings.push(`clause brief push failed: ${errorMessage(error)}`);
+        warnings.push(`room brief push failed: ${errorMessage(error)}`);
       }
       await this.notifyReveal(record, room, warnings);
       record.revealedRooms = [...new Set([...record.revealedRooms, room])];
@@ -437,7 +437,7 @@ export class ParticipantManager {
             warnings.push(`asciinema credential restore failed: ${errorMessage(error)}`);
           }
         }
-        await this.registerClaimant(record, warnings);
+        await this.registerOperative(record, warnings);
         for (const room of rooms) {
           await this.pushRoom(name, room);
           await this.notifyReveal(record, room, warnings);

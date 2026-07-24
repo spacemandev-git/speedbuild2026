@@ -1,4 +1,4 @@
-# Inference zone
+# Bureau inference zone
 
 This zone builds a CPU-only, Zen 5-native llama.cpp and runs `llama-server` on port 8080. Model files live under the persistent `/models` mount, while the active GGUF path is recorded in `/models/ACTIVE_MODEL`. The Hugging Face `hf` CLI is installed system-wide with pipx.
 

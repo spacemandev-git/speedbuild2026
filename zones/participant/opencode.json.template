@@ -22,12 +22,12 @@
         }
       }
     },
-    "estate": {
+    "bureau": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Estate Inference",
+      "name": "Bureau Inference",
       "options": {
         "baseURL": "http://10.61.0.30:8080/v1",
-        "apiKey": "{env:ESTATE_API_KEY}"
+        "apiKey": "{env:BUREAU_API_KEY}"
       },
       "models": {
         "${SB_MODEL_ALIAS}": {

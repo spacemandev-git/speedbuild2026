@@ -106,27 +106,27 @@ if ! command -v surfpool >/dev/null 2>&1 \
 fi
 surfpool --version
 
-mkdir -p /var/lib/surfpool /var/lib/estate /var/lib/executor
-chmod 0700 /var/lib/estate
-if [[ ! -s /var/lib/estate/deployer.json ]]; then
+mkdir -p /var/lib/surfpool /var/lib/bureau /var/lib/bureau-api
+chmod 0700 /var/lib/bureau
+if [[ ! -s /var/lib/bureau/deployer.json ]]; then
   solana-keygen new \
     --no-bip39-passphrase \
     --silent \
     --force \
-    -o /var/lib/estate/deployer.json
+    -o /var/lib/bureau/deployer.json
 fi
-chmod 0600 /var/lib/estate/deployer.json
+chmod 0600 /var/lib/bureau/deployer.json
 
 install -m 0644 "${ZONE_DIR}/surfpool.service" /etc/systemd/system/surfpool.service
-install -m 0644 "${ZONE_DIR}/executor-api.service" /etc/systemd/system/executor-api.service
+install -m 0644 "${ZONE_DIR}/bureau-api.service" /etc/systemd/system/bureau-api.service
 systemctl daemon-reload
 systemctl enable --now surfpool.service
-systemctl enable executor-api.service
+systemctl enable bureau-api.service
 
-cd /opt/packages/executor-api
+cd /opt/packages/bureau-api
 bun install
 
 cd "${ZONE_DIR}/deploy"
 bun install
 
-echo "Challenges zone setup complete. Run ${ZONE_DIR}/run-deploy.sh to deploy and seed the estate."
+echo "Challenges zone setup complete. Run ${ZONE_DIR}/run-deploy.sh to deploy and seed challenge state."

@@ -39,24 +39,24 @@ export async function pushStreamCredentials(
   publicToken: string,
 ): Promise<void> {
   await incus.exec(participantName, [
-    "install", "-d", "-m", "0700", "-o", "claimant", "-g", "claimant",
-    "/home/claimant/.local",
-    "/home/claimant/.local/state",
-    "/home/claimant/.local/state/asciinema",
-    "/home/claimant/.config",
-    "/home/claimant/.config/asciinema",
+    "install", "-d", "-m", "0700", "-o", "operative", "-g", "operative",
+    "/home/operative/.local",
+    "/home/operative/.local/state",
+    "/home/operative/.local/state/asciinema",
+    "/home/operative/.config",
+    "/home/operative/.config/asciinema",
   ]);
-  const uidOutput = await incus.exec(participantName, ["id", "-u", "claimant"]);
-  if (!/^\d+$/.test(uidOutput)) throw new Error(`invalid claimant uid returned by ${participantName}`);
+  const uidOutput = await incus.exec(participantName, ["id", "-u", "operative"]);
+  if (!/^\d+$/.test(uidOutput)) throw new Error(`invalid operative uid returned by ${participantName}`);
   const uid = Number(uidOutput);
-  const currentInstallId = "/home/claimant/.local/state/asciinema/install-id";
-  const legacyInstallId = "/home/claimant/.config/asciinema/install-id";
-  const streamToken = "/home/claimant/.config/asciinema/stream-token";
+  const currentInstallId = "/home/operative/.local/state/asciinema/install-id";
+  const legacyInstallId = "/home/operative/.config/asciinema/install-id";
+  const streamToken = "/home/operative/.config/asciinema/stream-token";
   await incus.filePushContent(`${installId}\n`, participantName, currentInstallId, 0o600, uid);
   await incus.filePushContent(`${installId}\n`, participantName, legacyInstallId, 0o600, uid);
   await incus.filePushContent(`${publicToken}\n`, participantName, streamToken, 0o600, uid);
   await incus.exec(participantName, [
-    "chown", "claimant:claimant", currentInstallId, legacyInstallId, streamToken,
+    "chown", "operative:operative", currentInstallId, legacyInstallId, streamToken,
   ]);
 }
 

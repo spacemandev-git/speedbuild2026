@@ -13,8 +13,8 @@ function numberValue(value: unknown): number | undefined {
   return undefined;
 }
 
-export function participantClaim(participant: ParticipantRecord): string {
-  return stringValue(participant.claimNumber) ?? stringValue(participant.claim_number) ?? participant.name;
+export function participantOperativeId(participant: ParticipantRecord): string {
+  return stringValue(participant.operativeId) ?? participant.name;
 }
 
 export function participantIp(participant: ParticipantRecord): string {
@@ -57,7 +57,7 @@ export function participantPublicKey(participant: ParticipantRecord): string | u
 }
 
 export function participantApiKey(participant: ParticipantRecord): string | undefined {
-  return stringValue(participant.apiKey) ?? stringValue(participant.estateApiKey);
+  return stringValue(participant.apiKey) ?? stringValue(participant.bureauApiKey);
 }
 
 export function participantWarnings(participant: ParticipantRecord): string[] {

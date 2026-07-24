@@ -15,7 +15,7 @@ export const actions: Actions = {
     const requestedName = text(form, 'name');
     try {
       const participant = await hostAgent.provision(requestedName || undefined);
-      return { success: true, message: `${participant.name} has entered probate.` };
+      return { success: true, message: `${participant.name} was provisioned.` };
     } catch (error) {
       return fail(502, { success: false, error: error instanceof Error ? error.message : String(error) });
     }
@@ -44,7 +44,7 @@ export const actions: Actions = {
 
     try {
       await hostAgent.remove(name);
-      return { success: true, message: `${name} has been removed from the estate.` };
+      return { success: true, message: `${name} was removed.` };
     } catch (error) {
       return fail(502, { success: false, error: error instanceof Error ? error.message : String(error) });
     }
@@ -53,11 +53,11 @@ export const actions: Actions = {
   resetAll: async () => {
     try {
       const participants = await hostAgent.participants();
-      if (participants.length === 0) return { success: true, message: 'No claimants to reset.' };
+      if (participants.length === 0) return { success: true, message: 'No operatives to reset.' };
 
       const results = await Promise.allSettled(participants.map((p) => hostAgent.control(p.name, 'reset')));
       const failures = results.flatMap((result, index) =>
-        result.status === 'rejected' ? [participants[index]?.name ?? `claimant ${index + 1}`] : []
+        result.status === 'rejected' ? [participants[index]?.name ?? `operative ${index + 1}`] : []
       );
       if (failures.length > 0) {
         return fail(502, {
@@ -65,7 +65,7 @@ export const actions: Actions = {
           error: `Reset failed for: ${failures.join(', ')}. Other resets may have succeeded.`
         });
       }
-      return { success: true, message: `Reset instruction accepted for ${participants.length} claimants.` };
+      return { success: true, message: `Reset instruction accepted for ${participants.length} operatives.` };
     } catch (error) {
       return fail(502, { success: false, error: error instanceof Error ? error.message : String(error) });
     }
@@ -74,11 +74,11 @@ export const actions: Actions = {
   removeAll: async () => {
     try {
       const participants = await hostAgent.participants();
-      if (participants.length === 0) return { success: true, message: 'No claimants to delete.' };
+      if (participants.length === 0) return { success: true, message: 'No operatives to delete.' };
 
       const results = await Promise.allSettled(participants.map((p) => hostAgent.remove(p.name)));
       const failures = results.flatMap((result, index) =>
-        result.status === 'rejected' ? [participants[index]?.name ?? `claimant ${index + 1}`] : []
+        result.status === 'rejected' ? [participants[index]?.name ?? `operative ${index + 1}`] : []
       );
       if (failures.length > 0) {
         return fail(502, {
@@ -86,7 +86,7 @@ export const actions: Actions = {
           error: `Delete failed for: ${failures.join(', ')}. Other deletions may have succeeded.`
         });
       }
-      return { success: true, message: `Removed ${participants.length} claimants from the estate.` };
+      return { success: true, message: `Removed ${participants.length} operatives.` };
     } catch (error) {
       return fail(502, { success: false, error: error instanceof Error ? error.message : String(error) });
     }
