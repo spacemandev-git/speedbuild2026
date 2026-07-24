@@ -31,9 +31,17 @@
     <h1>Claimants</h1>
     <p>Provision estates, control containers, and inspect the credentials entrusted to each claimant.</p>
   </div>
-  <form method="POST" action="?/provision">
-    <button class="button" type="submit">Provision participant</button>
-  </form>
+  <div class="action-row">
+    <form method="POST" action="?/provision">
+      <button class="button" type="submit">Provision participant</button>
+    </form>
+    <form method="POST" action="?/resetAll" onsubmit={(event) => confirmAction(event, 'Reset ALL claimants while preserving identity?')}>
+      <button class="button ghost" type="submit">Reset all</button>
+    </form>
+    <form method="POST" action="?/removeAll" onsubmit={(event) => confirmAction(event, 'Delete ALL claimants and their estates? This cannot be undone.')}>
+      <button class="button danger" type="submit">Delete all claimants</button>
+    </form>
+  </div>
 </div>
 
 {#if form && 'error' in form && form.error}<div class="error-banner">{form.error}</div>{/if}

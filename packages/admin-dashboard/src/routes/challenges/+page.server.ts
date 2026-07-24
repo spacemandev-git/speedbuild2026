@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit';
-import { executorAdmin, hostAgent } from '$lib/server/upstream';
+import { executorAdmin, executorPublic, hostAgent } from '$lib/server/upstream';
 import type { Actions, PageServerLoad } from './$types';
 
 function integer(form: FormData, key: string): number | null {
@@ -10,6 +10,26 @@ function integer(form: FormData, key: string): number | null {
 export const load: PageServerLoad = async () => ({ state: await executorAdmin.state() });
 
 export const actions: Actions = {
+  beginSeance: async ({ request }) => {
+    const form = await request.formData();
+    const participants = form.getAll('participant').filter((v): v is string => typeof v === 'string');
+    const bought = form.getAll('bought').filter((v): v is string => typeof v === 'string');
+    const claimPattern = /^[A-Za-z0-9-]{1,64}$/;
+    if (participants.length !== 6 || new Set(participants).size !== 6 || !participants.every((c) => claimPattern.test(c))) {
+      return fail(400, { success: false, error: 'The séance requires exactly six distinct claimants.' });
+    }
+    if (bought.length !== 2 || new Set(bought).size !== 2 || !bought.every((c) => participants.includes(c))) {
+      return fail(400, { success: false, error: 'Mark exactly two bought claimants, both among the six participants.' });
+    }
+
+    try {
+      await executorPublic.beginSeance({ participants, bought });
+      return { success: true, message: `The séance has begun for ${participants.length} claimants (${bought.length} bought).` };
+    } catch (cause) {
+      return fail(502, { success: false, error: cause instanceof Error ? cause.message : String(cause) });
+    }
+  },
+
   revealAll: async ({ request }) => {
     const form = await request.formData();
     const room = integer(form, 'room');

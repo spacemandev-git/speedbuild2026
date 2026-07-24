@@ -2,6 +2,7 @@ import { env } from '$env/dynamic/private';
 
 const HOST_AGENT_BASE = env.SB_HOST_AGENT_URL ?? 'http://10.61.0.1:7000';
 const EXECUTOR_ADMIN_BASE = env.SB_EXECUTOR_ADMIN_URL ?? 'http://10.61.0.20:8710';
+const EXECUTOR_PUBLIC_BASE = env.SB_EXECUTOR_PUBLIC_URL ?? 'http://10.61.0.20:8700';
 
 export type ParticipantRecord = {
   name: string;
@@ -269,6 +270,15 @@ export const executorAdmin = {
     return request(EXECUTOR_ADMIN_BASE, required('SB_ADMIN_TOKEN'), '/mercy', {
       method: 'POST',
       body: { claimNumber, room: roomId(room) }
+    });
+  }
+};
+
+export const executorPublic = {
+  beginSeance(config: { participants: string[]; bought: string[] }): Promise<{ ok: boolean; configured: boolean }> {
+    return request(EXECUTOR_PUBLIC_BASE, required('SB_ADMIN_TOKEN'), '/fragment/config', {
+      method: 'POST',
+      body: config
     });
   }
 };

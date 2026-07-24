@@ -103,6 +103,29 @@
 
 <div class="grid room-panels">
   <section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">Room III · The Séance</p><h2>Begin the séance</h2></div></div>
+    <p class="muted-copy">Seat exactly six participants and mark exactly two as bought, then begin the round.</p>
+    {#if data.state.claimants.length === 0}
+      <div class="empty-state compact">No claimants are present to seat.</div>
+    {:else}
+      <form method="POST" action="?/beginSeance">
+        <table class="matrix">
+          <thead><tr><th>Claimant</th><th>Participant</th><th>Bought</th></tr></thead>
+          <tbody>
+            {#each data.state.claimants as claimant (claimant.claimNumber)}
+              <tr>
+                <td>{claimant.claimNumber}</td>
+                <td><input type="checkbox" name="participant" value={claimant.claimNumber} /></td>
+                <td><input type="checkbox" name="bought" value={claimant.claimNumber} /></td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        <button class="button" type="submit">Begin séance</button>
+      </form>
+    {/if}
+  </section>
+  <section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">Room V · The Ledger</p><h2>Flash scoreboard</h2></div><span class="pill">{room5Scoreboard.length} entries</span></div>
     {#if room5Scoreboard.length === 0}
       <div class="empty-state compact">No Room 5 scoreboard data is present in the state dump.</div>
