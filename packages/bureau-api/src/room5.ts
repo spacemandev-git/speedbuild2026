@@ -331,6 +331,7 @@ function createRouter(runtime: () => Room5Runtime | null): Hono {
       state.completed = true;
       active.ctx.db.setRoomState(operativeId, "room5", "traversal", state);
       active.ctx.db.setRoomState(operativeId, "room5", "scoreboard", score);
+      active.ctx.db.markRoomVerified(operativeId, "room5");
       active.ctx.events.emit({
         type: "room5.route-complete",
         room: "room5",

@@ -12,6 +12,7 @@ import {
   createRoom2App,
   room2HopBAmount,
   room2Nonces,
+  room2VaultOwner,
   type Room2Resources,
 } from "../src/room2.ts";
 
@@ -123,5 +124,74 @@ describe("Room 2 Hop A", () => {
     expect(settlements).toBe(2);
     expect(JSON.parse(ctx.db.listRoomState()[0]?.value ?? "null")).toBe("PAID");
     expect(ctx.db.recentEvents().map((event) => event.type)).toContain("room2.hopA");
+  });
+});
+
+describe("Room 2 completion", () => {
+  test("marks the room verified only after both hops are PAID", async () => {
+    const ctx = context();
+    const operativeId = "OPERATIVE-07";
+    ctx.db.reveal(operativeId, "room2");
+    const mint = Keypair.generate().publicKey;
+    const owner = Keypair.generate().publicKey;
+    const resources: Room2Resources = {
+      mint: mint.toBase58(),
+      feePayer: Keypair.generate().publicKey.toBase58(),
+      componentOwner: owner.toBase58(),
+      componentAta: getAssociatedTokenAddressSync(mint, owner).toBase58(),
+    };
+    const { nonceA, nonceB } = room2Nonces(ctx.config.bureauSecret, operativeId);
+    const vaultOwner = room2VaultOwner(ctx.config.bureauSecret, operativeId);
+    const vaultAta = getAssociatedTokenAddressSync(mint, vaultOwner).toBase58();
+    const hopBAmount = room2HopBAmount(nonceB);
+    let hop: "A" | "B" = "A";
+    const settle = async (): Promise<SettledPayment> => ({
+      signature: `signature-hop${hop}`,
+      payerPubkey: Keypair.generate().publicKey.toBase58(),
+      amount: hop === "A" ? 2_500n : hopBAmount,
+      destination: hop === "A" ? resources.componentAta : vaultAta,
+      memo: hop === "A" ? nonceA : null,
+    });
+    const room = createRoom2App(ctx, {
+      loadResources: async () => resources,
+      settle,
+      ensureVaultTokenAccount: async () => {},
+    });
+
+    const hopA = await room.request(`/component/${operativeId}`, {
+      headers: {
+        "X-PAYMENT": header({
+          scheme: "exact",
+          network: SVM_NETWORK,
+          amount: "2500",
+          asset: resources.mint,
+          payTo: resources.componentOwner,
+          maxTimeoutSeconds: 120,
+          extra: { feePayer: resources.feePayer, memoRequired: nonceA, exact: true },
+        }),
+      },
+    });
+    expect(hopA.status).toBe(200);
+    expect(JSON.parse(ctx.db.getRoomState(operativeId, "room2", "hopA") ?? "null")).toBe("PAID");
+    expect(ctx.db.getRoomState(operativeId, "room2", "status")).toBeNull();
+
+    hop = "B";
+    const hopB = await room.request(`/authorize/${operativeId}`, {
+      headers: {
+        "X-CARRY": nonceB,
+        "X-PAYMENT": header({
+          scheme: "exact",
+          network: SVM_NETWORK,
+          amount: hopBAmount.toString(),
+          asset: resources.mint,
+          payTo: vaultOwner.toBase58(),
+          maxTimeoutSeconds: 120,
+          extra: { feePayer: resources.feePayer, amountFormula: "4000 + (nonce_B mod 6000)" },
+        }),
+      },
+    });
+    expect(hopB.status).toBe(200);
+    expect(await hopB.json()).toMatchObject({ status: "UNSEALED" });
+    expect(JSON.parse(ctx.db.getRoomState(operativeId, "room2", "status") ?? "null")).toBe("verified");
   });
 });

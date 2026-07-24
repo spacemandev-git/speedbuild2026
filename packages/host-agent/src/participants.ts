@@ -182,7 +182,8 @@ export class ParticipantManager {
       `export BUREAU_API_KEY=${shellQuote(record.apiKey)}`,
       `export OPERATIVE_ID=${shellQuote(record.operativeId)}`,
       "export SOLANA_KEYPAIR=/home/operative/.config/solana/id.json",
-      // Shared OpenRouter key powering the GLM 5.2 backup provider in
+      // Shared OpenRouter key powering the default OpenCode model
+      // (openai/gpt-5.6-sol) and the alternative z-ai/glm-5.2 entry in
       // opencode.json. Only emitted when configured on the host.
       ...(this.config.sunburstOrKey
         ? [`export SUNBURST_OR_KEY=${shellQuote(this.config.sunburstOrKey)}`]

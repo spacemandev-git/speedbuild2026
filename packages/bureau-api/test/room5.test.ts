@@ -119,6 +119,25 @@ describe("Room 5 route traversal", () => {
     expect(ctx.db.recentEvents(20).map((event) => event.type)).toContain("room5.route-complete");
   });
 
+  test("marks the room verified only once the route completes", async () => {
+    const { ctx, settle, paymentHeader } = fixture();
+    const app = createRoom5App(ctx, settle);
+    const route = deriveRoom5Route(ctx.config.bureauSecret, "OPERATIVE-07");
+    const query = "?operative=OPERATIVE-07";
+
+    expect((await paid(app, `/node/start${query}`, paymentHeader)).status).toBe(200);
+    expect(ctx.db.getRoomState("OPERATIVE-07", "room5", "status")).toBeNull();
+
+    for (let position = 2; position <= 6; position += 1) {
+      expect((await paid(app, `/node/${route.nodes[position - 1]}${query}`, paymentHeader)).status).toBe(200);
+      expect(ctx.db.getRoomState("OPERATIVE-07", "room5", "status")).toBeNull();
+    }
+
+    const final = await paid(app, `/node/${route.nodes[6]}${query}`, paymentHeader);
+    expect(await final.json()).toMatchObject({ hops_correct: 7 });
+    expect(JSON.parse(ctx.db.getRoomState("OPERATIVE-07", "room5", "status") ?? "null")).toBe("verified");
+  });
+
   test("maps correct hops to bounded display times", () => {
     expect(flashSeconds(-4)).toBe(3);
     expect(flashSeconds(0)).toBe(3);

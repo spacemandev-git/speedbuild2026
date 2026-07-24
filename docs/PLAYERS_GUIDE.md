@@ -15,9 +15,20 @@ At check-in you receive:
 - SSH access to an isolated Linux box, reachable over the venue network on an assigned port.
 - A password. If you supplied an SSH public key in advance, it is already installed.
 
-Your box includes a pre-funded wallet, the complete Solana/x402/Pay.sh toolchain, and a local AI
-coding assistant. No installation is required to start.
+Your box includes a pre-funded wallet, the complete Solana/x402/Pay.sh toolchain, and an AI
+coding agent. No installation is required to start.
 A copy of this guide is pre-installed at `~/PLAYERS_GUIDE.md` on every box.
+
+> **Your AI coding agent is `opencode`.** Once you are on the box, run:
+>
+> ```sh
+> cd ~/bureau
+> opencode
+> ```
+>
+> It is preconfigured — no login, no API key, no setup. The default model is **GPT 5.6 Sol**
+> (served over OpenRouter); the local Bureau inference model is also selectable from inside
+> OpenCode with `/models`. Details in [section 5](#5-the-ai-assistant).
 
 ### Connecting
 
@@ -104,22 +115,27 @@ Everything required is on `PATH`:
 | `jq` | Parse and select JSON response data |
 | `tmux` | Keep multiple panes and survive a dropped SSH connection |
 | `git`, `vim`, `nano` | Standard development tools |
-| `opencode` | Local AI coding assistant |
+| `opencode` | Your AI coding agent — run it in `~/bureau` (see section 5) |
 
 Start each session in `tmux` so a dropped connection does not terminate a build or assistant.
 Reconnect with `tmux attach`.
 
 ## 5. The AI assistant
 
-OpenCode is configured for the Bureau inference service. Start it from your workspace:
+Your AI coding agent is OpenCode. The command is `opencode`. Start it from your workspace:
 
 ```sh
 cd ~/bureau
 opencode
 ```
 
-No login or pasted key is required. It uses `BUREAU_API_KEY` and includes a Solana MCP tool for
-chain lookups.
+No login or pasted key is required — the config is already on the box.
+
+- The default model is **GPT 5.6 Sol** (`openai/gpt-5.6-sol`, served over OpenRouter).
+- The local **Bureau Inference** model runs on the venue server and is selectable from inside
+  OpenCode with `/models`. It uses your `BUREAU_API_KEY` and works even if the venue uplink does not.
+
+OpenCode also includes a Solana MCP tool for chain lookups.
 
 The challenges are designed around facts an assistant cannot infer: unlabeled byte layouts,
 required memos omitted by convenience clients, state carried from one step to the next, and
@@ -139,9 +155,9 @@ Be careful when it:
 - Assumes an IDL or schema exists.
 - Invents program IDs, amounts, or other live values instead of using the brief endpoint.
 
-The model is shared across all participants on one CPU server. Under load it can generate only a
-few tokens per second and may be bursty. Keep prompts focused and request one concrete task at a
-time.
+The local Bureau model is shared across all participants on one CPU server. Under load it can
+generate only a few tokens per second and may be bursty. Keep prompts focused and request one
+concrete task at a time.
 
 ## 6. How to approach each room
 

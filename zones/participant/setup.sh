@@ -173,6 +173,33 @@ CARGO_HOME="/opt/cargo"
 EOF
 install_managed_file "$WORK_DIR/environment" /etc/environment 0644 root root
 
+# Login banner. pam_motd prints /etc/motd for every ssh session on Ubuntu, so no
+# sshd_config change is needed.
+cat >"$WORK_DIR/motd" <<'EOF'
+
+  BUREAU OPERATIVE WORKSTATION -- authorized personnel only.
+
+  Run  opencode  to start your AI coding agent. It is already configured:
+  no login, no API key, no setup. Start it from  ~/bureau .
+
+  Read  ~/PLAYERS_GUIDE.md  first. It covers this box, your wallet and tools.
+  Room briefs land in  ~/bureau/rooms/  as they are revealed to you.
+  Your funded Solana keypair is at  ~/.config/solana/id.json .
+
+  This terminal is recorded. The Bureau thanks you for your cooperation.
+
+EOF
+install_managed_file "$WORK_DIR/motd" /etc/motd 0644 root root
+
+# Ubuntu's dynamic motd fragments would bury the banner above. Disabling the
+# noisy ones is idempotent and safe when a fragment is absent.
+for motd_fragment in \
+  /etc/update-motd.d/00-header \
+  /etc/update-motd.d/10-help-text \
+  /etc/update-motd.d/50-motd-news; do
+  [[ -e $motd_fragment ]] && chmod -x "$motd_fragment" 2>/dev/null || true
+done
+
 if [[ ! -s "$SCRIPT_DIR/rec-shell" ]]; then
   echo "$SCRIPT_DIR/rec-shell is missing or empty" >&2
   exit 1

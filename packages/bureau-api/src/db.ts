@@ -153,6 +153,12 @@ export class BureauDatabase {
     this.setRoomState("*", room, "complete", true);
   }
 
+  // Durable per-operative solve marker. Every room writes this on its own success
+  // path so consumers read one key instead of five room-specific shapes.
+  markRoomVerified(operativeId: string, room: string): void {
+    this.setRoomState(operativeId, room, "status", "verified");
+  }
+
   listCompletedRooms(): string[] {
     const rows = this.sqlite.query(`
       SELECT room FROM room_state

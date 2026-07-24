@@ -210,14 +210,16 @@ function normalizeBureauState(payload: unknown): BureauState {
       const current = operative.rooms[room];
       const value = row.value;
       const valueObject = objectValue(value);
+      const details = objectValue(current?.detail) ?? {};
+      const detail = { ...details, [stringValue(row.key) ?? 'state']: value };
+      // The `status` room_state key is the room's own solve marker. Reading it back off
+      // the accumulated detail keeps it authoritative no matter which key lands last.
       const status = stringValue(
+        detail.status,
         valueObject?.status,
-        row.key === 'status' ? value : undefined,
         current?.status,
         'in-progress'
       )!;
-      const details = objectValue(current?.detail) ?? {};
-      const detail = { ...details, [stringValue(row.key) ?? 'state']: value };
       // A marshal force-completion outranks whatever status the room was in.
       operative.rooms[room] = {
         status: detail.forced === true ? 'force-completed' : status,

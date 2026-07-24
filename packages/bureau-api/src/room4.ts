@@ -32,6 +32,8 @@ export function createRoom4App(ctx: AppContext): Hono {
         statusReadError = error instanceof Error ? error.message : String(error);
       }
       const message = `${body.operative}: CROSSING CONFIRMED`;
+      // A confirmed crossing is the room's only solve condition.
+      ctx.db.markRoomVerified(body.operative, "room4");
       ctx.events.emit({
         type: "room4.presented", room: "room4", operativeId: body.operative, message,
         data: { operativeId: body.operative, code: body.code, signature, clearanceRecord, statusReadError },

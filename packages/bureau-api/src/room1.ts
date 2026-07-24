@@ -220,6 +220,7 @@ export class Room1Watcher {
       if (result.matched) {
         const chainSignature = await this.chain.markVerified(operative.operative_id);
         this.db.markRoom1Verified(operative.operative_id);
+        this.db.markRoomVerified(operative.operative_id, "room1");
         const message = `${operative.operative_id}: VERIFIED — UNLOCK RELEASED`;
         this.events.emit({
           type: "room1.verified", room: "room1", operativeId: operative.operative_id, message,

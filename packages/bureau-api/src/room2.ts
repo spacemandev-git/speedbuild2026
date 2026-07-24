@@ -363,6 +363,10 @@ export function createRoom2App(
     const combo = fourDigit(operativeId, "room2", ctx.config.bureauSecret);
     const component = `COMPONENT-${room2ComponentIndex(operativeId)}`;
     ctx.db.setRoomState(operativeId, "room2", "hopB", "PAID");
+    // Room 2 is solved only when both hops have settled; a lone hop is not a solve.
+    if (roomState(ctx, operativeId, "hopA") === "PAID" && roomState(ctx, operativeId, "hopB") === "PAID") {
+      ctx.db.markRoomVerified(operativeId, "room2");
+    }
     ctx.events.emit({
       type: "room2.unsealed",
       room: "room2",

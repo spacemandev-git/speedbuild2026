@@ -468,6 +468,8 @@ app.post("/reconstruct/attempt", async (c) => {
 
   if (passed) {
     ctx.db.setRoomState(ROUND, ROOM, "passed", true);
+    // The round passes as a group, so every configured participant is solved.
+    for (const participant of config.participants) ctx.db.markRoomVerified(participant, ROOM);
     const message = "Room 3 reconstruction passed.";
     ctx.events.emit({ type: "room3.pass", room: ROOM, message, data: { operativeIds } });
     const unlocks = Object.fromEntries(config.participants.map((operativeId) => [
