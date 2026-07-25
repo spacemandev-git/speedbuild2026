@@ -17,11 +17,24 @@ verifiers from an operative ID.
 - **Bureau API:** public `http://10.61.0.20:8700`; honest facilitator `:8701`; FAC-A trap
   facilitator `:8702`; ledger `:8703`; admin `:8710`.
 - **SPL Memo program:** `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`.
-- **Registry program ID:** served as `programId` by `/brief/room1` and `/brief/room4`. A built
-  value may be `B15pHuKQP2ay9Zx85JjpM1rSxy5e4Zd2J3MjLVkfsvSB`, but always read it live because
+- **Registry program ID:** served as `programId` by `/brief/room1` and `/brief/room4`. The current
+  deployment is `9BJZAwfpZu5P9WTNMPG3WpBhJW8HYZ8LcnVnQ358SGbM`, but always read it live because
   `anchor keys sync` can regenerate the deployment keypair.
 - **CRED mint / deployer:** served as `credMint`. Most fees land in the deployer's associated
   token account for the `CRED` mint.
+- **`payTo` is a wallet, not a token account.** In x402 exact-SVM the advertised `payTo` is the
+  recipient's *wallet* address and the paying client derives that wallet's associated token
+  account itself, so the settled transfer lands on the ATA rather than on `payTo`. Verifiers
+  advertise the owner and compare the settled destination against the derived ATA. Advertising an
+  ATA as `payTo` makes clients derive an ATA-of-an-ATA, which silently takes the operative's money
+  and then fails the destination check — that bug kept Room 5 unsolvable until 2026-07-25.
+- **`x402-curl`:** the first-party payment client installed at `/usr/local/bin/x402-curl` on every
+  operative box (`packages/x402-curl`). It performs the 402→pay→retry cycle, signing with the
+  operative's own funded keypair at `~/.config/solana/id.json`, and talks to the local validator.
+  `x402-curl -v <url>` prints the advertised terms and the settlement signature to stderr, which is
+  the fastest way to diagnose a rejected payment. The third-party `pay` (pay.sh) CLI is **not**
+  usable here: on Linux it stores accounts only in a GNOME keyring whose unlock prompt a headless
+  container cannot answer.
 - **Brief gate:** `GET /brief/:room?operative=X` returns `404` until the room is revealed to that
   operative. Every verifier rechecks reveal state.
 
@@ -136,7 +149,10 @@ Build the `X-PAYMENT` header manually:
 `extra.feePayer`.
 
 The convenience-client trap is deliberate: `x402-fetch`/`x402-axios` can settle the transfer
-without a memo. The service then emits `room2.fee-kept` and returns:
+without a memo. **`x402-curl` falls into the same trap** — it attaches the x402 library's own
+memo, not `nonceA`, and Hop A requires `settlement.memo === nonceA` exactly. Room 2 must be paid
+with a hand-built envelope; expect operatives who solved Room 5 with `x402-curl` to reach for it
+here and lose the fee. The service then emits `room2.fee-kept` and returns:
 
 ```json
 { "status": "SEALED", "carry": "<nonceB>" }
@@ -384,17 +400,17 @@ decoys.
 
 ```sh
 curl "http://10.61.0.20:8700/brief/room5?operative=$OPERATIVE_ID"
-pay setup
-pay whoami
-pay --local curl \
-  "http://10.61.0.20:8703/node/start?operative=$OPERATIVE_ID"
+x402-curl "http://10.61.0.20:8703/node/start?operative=$OPERATIVE_ID"
 ```
 
-`pay setup` creates an ephemeral, pre-funded sandbox wallet, so no funding step can block the
-operative.
+There is no wallet setup step. `x402-curl` signs with the keypair the box was provisioned with at
+`~/.config/solana/id.json`, which registration funds with `100` `CRED` (six decimals) — four
+orders of magnitude more than the `1400` base units a full seven-hop route costs, so an operative
+cannot run dry.
 
-Each node is x402-gated for `200` `CRED` to the deployer ATA with deployer `feePayer`.
-`pay --local` performs the 402→pay→retry cycle. The `?operative=` query is required on every
+Each node is x402-gated for `200` `CRED` with the deployer as both `payTo` and `feePayer`; the
+settled transfer lands in the deployer's `CRED` ATA, which is what the verifier compares against.
+`x402-curl` performs the 402→pay→retry cycle. The `?operative=` query is required on every
 request. Route state and scoreboard rows are per-operative.
 
 ### Traversal
@@ -423,7 +439,7 @@ The intended loop is:
 ```text
 id = "start"
 loop 7 times:
-  resp = pay --local curl \
+  resp = x402-curl \
     "http://10.61.0.20:8703/node/<id>?operative=<operative>"
   if resp has flash_seconds: done
   id = resp.next
@@ -470,6 +486,11 @@ node from its valid, payable decoy.
 - **Pool derivation:** deterministic codes are generated with `SB_BUREAU_SECRET` across the full
   `SB_OPERATIVE_POOL`, `OPERATIVE-01` through `OPERATIVE-NN`, whether or not an ID is registered.
   Check-in assigns IDs; unused IDs remain available to reserves.
+- **Room status:** every room writes a durable per-operative `status=verified` room_state key on
+  its own solve path (Room 1 verification, both Room 2 hops `PAID`, a Room 3 round pass for each
+  participant, a Room 4 confirmed crossing, a completed Room 5 route), which is what the dashboard
+  renders. A marshal `force-complete` records `forced` instead and displays as `force-completed`,
+  so a genuine solve stays distinguishable from an override.
 - **Diagnostics:** events such as `room1.rejected`, `room2.fee-kept`,
   `room3.trap-settled`, `room4.presented`, and route decoy diagnostics include exact mismatches
   such as expected versus observed amount, memo, or destination. Use the admin event feed to
