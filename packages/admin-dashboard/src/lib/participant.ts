@@ -56,10 +56,6 @@ export function participantPublicKey(participant: ParticipantRecord): string | u
   );
 }
 
-export function participantApiKey(participant: ParticipantRecord): string | undefined {
-  return stringValue(participant.apiKey) ?? stringValue(participant.bureauApiKey);
-}
-
 export function participantWarnings(participant: ParticipantRecord): string[] {
   const warnings = Array.isArray(participant.warnings)
     ? participant.warnings.filter((warning): warning is string => typeof warning === 'string')

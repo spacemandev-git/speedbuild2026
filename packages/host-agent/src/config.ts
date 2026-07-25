@@ -1,7 +1,6 @@
 export const ZONE_IPS = {
   admin: "10.61.0.10",
   challenges: "10.61.0.20",
-  inference: "10.61.0.30",
 } as const;
 
 export const BUREAU_ADMIN_BASE = "http://10.61.0.20:8710";
@@ -68,8 +67,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     statePath: env.STATE_PATH?.trim() || "/var/lib/speedbuild/state.json",
     contentDir: env.CONTENT_DIR?.trim() || "/opt/speedbuild/challenges-content",
     hostLanHint: env.SB_HOST_LAN_HINT?.trim() || "<host-lan-ip>",
-    // Shared OpenRouter key for the GLM 5.2 backup inference path. Optional:
-    // when unset, participants fall back to the local Bureau provider only.
+    // Shared OpenRouter key for the default GPT 5.6 Sol model and the
+    // selectable GLM 5.2 alternative. No model access is configured when unset.
     sunburstOrKey: env.SUNBURST_OR_KEY?.trim() || undefined,
   };
 }

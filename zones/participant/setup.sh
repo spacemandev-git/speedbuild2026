@@ -25,15 +25,6 @@ fi
 
 # shellcheck source=/dev/null
 source /etc/speedbuild.env
-: "${SB_MODEL_ALIAS:?SB_MODEL_ALIAS must be set}"
-: "${SB_LLAMA_CTX_TOTAL:?SB_LLAMA_CTX_TOTAL must be set}"
-: "${SB_LLAMA_PARALLEL:?SB_LLAMA_PARALLEL must be set}"
-if (( SB_LLAMA_PARALLEL <= 0 )); then
-  echo "SB_LLAMA_PARALLEL must be greater than zero" >&2
-  exit 1
-fi
-SB_OPENCODE_CTX=$((SB_LLAMA_CTX_TOTAL / SB_LLAMA_PARALLEL))
-export SB_MODEL_ALIAS SB_OPENCODE_CTX
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 WORK_DIR=$(mktemp -d)
@@ -257,22 +248,18 @@ EOF
 install_managed_file "$WORK_DIR/solana-config.yml" \
   /home/operative/.config/solana/cli/config.yml 0600 operative operative
 
-if [[ ! -s "$SCRIPT_DIR/opencode.json.template" ]]; then
-  echo "$SCRIPT_DIR/opencode.json.template is missing or empty" >&2
+if [[ ! -s "$SCRIPT_DIR/opencode.json" ]]; then
+  echo "$SCRIPT_DIR/opencode.json is missing or empty" >&2
   exit 1
 fi
-# Only these two SB_ variables may be expanded; the OpenCode {env:...} token must survive.
-# shellcheck disable=SC2016
-envsubst '$SB_MODEL_ALIAS $SB_OPENCODE_CTX' \
-  <"$SCRIPT_DIR/opencode.json.template" >"$WORK_DIR/opencode.json"
-jq -e . "$WORK_DIR/opencode.json" >/dev/null
-install_managed_file "$WORK_DIR/opencode.json" \
+jq -e . "$SCRIPT_DIR/opencode.json" >/dev/null
+install_managed_file "$SCRIPT_DIR/opencode.json" \
   /home/operative/.config/opencode/opencode.json 0600 operative operative
 
 cat >"$WORK_DIR/bureau-readme.md" <<'EOF'
 # Speed Build workspace
 
-Room briefs appear under `~/bureau/rooms/` as they are revealed. OpenCode is preconfigured for the Bureau inference service; run `opencode` here.
+Room briefs appear under `~/bureau/rooms/` as they are revealed. OpenCode is preconfigured for OpenRouter; run `opencode` here.
 First login? Start with `~/PLAYERS_GUIDE.md` — the practical guide to your box and tools.
 EOF
 install_managed_file "$WORK_DIR/bureau-readme.md" \

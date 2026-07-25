@@ -29,15 +29,6 @@ sb_load_config() {
     SB_ADMIN_TOKEN
     SB_HOST_AGENT_TOKEN
     SB_ZPOOL_SIZE
-    SB_MODELS_DIR
-    SB_MODEL_HF_REPO
-    SB_MODEL_QUANT
-    SB_MODEL_ALIAS
-    SB_LLAMA_THREADS
-    SB_LLAMA_PARALLEL
-    SB_LLAMA_CTX_TOTAL
-    SB_INFER_CPUS
-    SB_INFER_MEM
     SB_CHAL_CPUS
     SB_CHAL_MEM
     SB_ADMIN_CPUS
@@ -73,8 +64,7 @@ sb_load_config() {
   SB_IP_HOST=10.61.0.1
   SB_IP_ADMIN=10.61.0.10
   SB_IP_CHALLENGES=10.61.0.20
-  SB_IP_INFERENCE=10.61.0.30
-  export SB_IP_HOST SB_IP_ADMIN SB_IP_CHALLENGES SB_IP_INFERENCE
+  export SB_IP_HOST SB_IP_ADMIN SB_IP_CHALLENGES
 }
 
 sb_tenant_mode() {
@@ -136,7 +126,6 @@ sb_zone_limits() {
 
   if [[ "${SB_SMOKE_TEST}" == 1 ]]; then
     case "${zone}" in
-      inference) printf '8 16GiB\n' ;;
       challenges) printf '4 8GiB\n' ;;
       admin) printf '2 4GiB\n' ;;
       *) sb_die "Unknown zone for limits: ${zone}" ;;
@@ -145,7 +134,6 @@ sb_zone_limits() {
   fi
 
   case "${zone}" in
-    inference) printf '%s %s\n' "${SB_INFER_CPUS}" "${SB_INFER_MEM}" ;;
     challenges) printf '%s %s\n' "${SB_CHAL_CPUS}" "${SB_CHAL_MEM}" ;;
     admin) printf '%s %s\n' "${SB_ADMIN_CPUS}" "${SB_ADMIN_MEM}" ;;
     *) sb_die "Unknown zone for limits: ${zone}" ;;

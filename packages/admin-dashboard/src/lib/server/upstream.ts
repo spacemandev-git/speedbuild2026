@@ -19,8 +19,6 @@ export type ParticipantRecord = {
   pubkey?: string;
   walletPublicKey?: string;
   solanaPubkey?: string;
-  apiKey?: string;
-  bureauApiKey?: string;
   streamToken?: string | null;
   asciinemaToken?: string | null;
   revealed?: Array<number | string>;

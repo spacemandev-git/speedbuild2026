@@ -9,8 +9,6 @@ export interface ParticipantRecord {
   password: string;
   solanaPubkey: string;
   solanaSecretKey: number[];
-  apiKeyIndex: number;
-  apiKey: string;
   authorizedKey?: string;
   asciinemaToken?: string | null;
   installId?: string | null;
@@ -23,12 +21,10 @@ export interface ParticipantRecord {
 
 export interface HostAgentState {
   participants: Record<string, ParticipantRecord>;
-  apiKeysAssigned: number[];
 }
 
 export const EMPTY_STATE: HostAgentState = {
   participants: {},
-  apiKeysAssigned: [],
 };
 
 function isNotFound(error: unknown): boolean {
@@ -49,10 +45,21 @@ export class StateStore {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) throw new Error("state file is not an object");
     const value = parsed as Partial<HostAgentState>;
-    if (typeof value.participants !== "object" || value.participants === null || !Array.isArray(value.apiKeysAssigned)) {
+    if (typeof value.participants !== "object" || value.participants === null) {
       throw new Error("state file has an invalid shape");
     }
-    return value as HostAgentState;
+    const participants = Object.fromEntries(
+      Object.entries(value.participants).map(([name, record]) => {
+        if (typeof record !== "object" || record === null) {
+          throw new Error("state file has an invalid participant record");
+        }
+        const cleanRecord = { ...record } as Record<string, unknown>;
+        delete cleanRecord.apiKeyIndex;
+        delete cleanRecord.apiKey;
+        return [name, cleanRecord as unknown as ParticipantRecord] as const;
+      }),
+    );
+    return { participants };
   }
 
   async save(state: HostAgentState): Promise<void> {

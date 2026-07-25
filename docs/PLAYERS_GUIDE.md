@@ -27,8 +27,7 @@ A copy of this guide is pre-installed at `~/PLAYERS_GUIDE.md` on every box.
 > ```
 >
 > It is preconfigured — no login, no API key, no setup. The default model is **GPT 5.6 Sol**
-> (served over OpenRouter); the local Bureau inference model is also selectable from inside
-> OpenCode with `/models`. Details in [section 5](#5-the-ai-assistant).
+> (served over OpenRouter). Details in [section 5](#5-the-ai-assistant).
 
 ### Connecting
 
@@ -46,12 +45,12 @@ Floor marshals provide `<host>` and `<port>`. Every participant logs in as the U
 
 ## 2. Your identity and wallet
 
-Two environment variables are set at login:
+Your identity and wallet path are set at login:
 
 | Variable | What it is |
 |---|---|
 | `OPERATIVE_ID` | Your event identity. Challenge endpoints and result values are keyed to it. |
-| `BUREAU_API_KEY` | Your personal key for the Bureau AI inference service, already configured in OpenCode. |
+| `SOLANA_KEYPAIR` | Path to the funded Solana keypair used by the event tools. |
 
 They are stored in `~/.bureau-env` and loaded into the login environment.
 
@@ -132,8 +131,7 @@ opencode
 No login or pasted key is required — the config is already on the box.
 
 - The default model is **GPT 5.6 Sol** (`openai/gpt-5.6-sol`, served over OpenRouter).
-- The local **Bureau Inference** model runs on the venue server and is selectable from inside
-  OpenCode with `/models`. It uses your `BUREAU_API_KEY` and works even if the venue uplink does not.
+- **GLM 5.2** (`z-ai/glm-5.2`) is also available through OpenRouter from OpenCode's `/models`.
 
 OpenCode also includes a Solana MCP tool for chain lookups.
 
@@ -154,10 +152,6 @@ Be careful when it:
 - Uses a standard transfer recipe that omits the required SPL Memo instruction.
 - Assumes an IDL or schema exists.
 - Invents program IDs, amounts, or other live values instead of using the brief endpoint.
-
-The local Bureau model is shared across all participants on one CPU server. Under load it can
-generate only a few tokens per second and may be bursty. Keep prompts focused and request one
-concrete task at a time.
 
 ## 6. How to approach each room
 

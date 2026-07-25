@@ -179,7 +179,6 @@ export class ParticipantManager {
 
     logStep("push-bureau-env", name);
     const environment = [
-      `export BUREAU_API_KEY=${shellQuote(record.apiKey)}`,
       `export OPERATIVE_ID=${shellQuote(record.operativeId)}`,
       "export SOLANA_KEYPAIR=/home/operative/.config/solana/id.json",
       // Shared OpenRouter key powering the default OpenCode model
@@ -226,15 +225,6 @@ export class ParticipantManager {
     await this.configureIdentity(name, record, warnings);
     logStep("add-ssh-proxy", name, String(record.sshPort));
     await this.incus.deviceAdd(name, `ssh-${name}`, record.sshPort);
-  }
-
-  private async nextApiKey(state: HostAgentState): Promise<{ index: number; apiKey: string }> {
-    let index = 1;
-    const assigned = new Set(state.apiKeysAssigned);
-    while (assigned.has(index)) index += 1;
-    const apiKey = (await this.incus.exec("inference", ["sed", "-n", `${index}p`, "/etc/llama/api-keys.txt"])).trim();
-    if (!/^[A-Za-z0-9._-]+$/.test(apiKey)) throw new Error(`API key line ${index} is missing or invalid`);
-    return { index, apiKey };
   }
 
   private async registerOperative(record: ParticipantRecord, warnings: string[]): Promise<void> {
@@ -291,7 +281,6 @@ export class ParticipantManager {
       const n = this.selectNumber(state, requestedName);
       const name = participantName(n);
       const keypair = Keypair.generate();
-      const { index, apiKey } = await this.nextApiKey(state);
       const validatedAuthorizedKey = authorizedKey === undefined ? undefined : validateAuthorizedKey(authorizedKey);
       const record: ParticipantRecord = {
         n,
@@ -301,8 +290,6 @@ export class ParticipantManager {
         password: generatePassword(),
         solanaPubkey: keypair.publicKey.toBase58(),
         solanaSecretKey: Array.from(keypair.secretKey),
-        apiKeyIndex: index,
-        apiKey,
         ...(validatedAuthorizedKey ? { authorizedKey: validatedAuthorizedKey } : {}),
         asciinemaToken: null,
         installId: null,
@@ -318,7 +305,6 @@ export class ParticipantManager {
         await this.registerOperative(record, warnings);
         await this.provisionStreamToken(name, record, warnings);
         state.participants[name] = record;
-        state.apiKeysAssigned = [...new Set([...state.apiKeysAssigned, index])].sort((a, b) => a - b);
         await this.stateStore.save(state);
       } catch (error) {
         logStep("rollback", name, errorMessage(error));
@@ -525,7 +511,6 @@ export class ParticipantManager {
       await this.incus.delete(name, true);
       await this.deregisterOperative(record, warnings);
       delete state.participants[name];
-      state.apiKeysAssigned = state.apiKeysAssigned.filter((index) => index !== record.apiKeyIndex);
       await this.stateStore.save(state);
       return { name, removed: true, warnings };
     });

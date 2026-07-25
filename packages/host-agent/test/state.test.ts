@@ -17,7 +17,6 @@ describe("StateStore", () => {
     directories.push(directory);
     expect(await new StateStore(join(directory, "missing", "state.json")).load()).toEqual({
       participants: {},
-      apiKeysAssigned: [],
     });
   });
 
@@ -35,18 +34,55 @@ describe("StateStore", () => {
           password: "acorn-amber-anchor-arrow",
           solanaPubkey: "example-public-key",
           solanaSecretKey: [1, 2, 3],
-          apiKeyIndex: 1,
-          apiKey: "sb-example",
           asciinemaToken: null,
           revealedRooms: ["room1"],
           createdAt: "2026-07-16T00:00:00.000Z",
           status: "Running",
         },
       },
-      apiKeysAssigned: [1],
     };
 
     await store.save(state);
     expect(await store.load()).toEqual(state);
+  });
+
+  test("drops retired model credentials from legacy state", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "sb-state-test-"));
+    directories.push(directory);
+    const path = join(directory, "state.json");
+    await Bun.write(path, JSON.stringify({
+      participants: {
+        p01: {
+          n: 1,
+          operativeId: "OPERATIVE-01",
+          ip: "10.61.0.101",
+          sshPort: 2201,
+          password: "acorn-amber-anchor-arrow",
+          solanaPubkey: "example-public-key",
+          solanaSecretKey: [1, 2, 3],
+          apiKeyIndex: 1,
+          apiKey: "retired-key",
+          revealedRooms: [],
+          createdAt: "2026-07-16T00:00:00.000Z",
+        },
+      },
+      apiKeysAssigned: [1],
+    }));
+
+    expect(await new StateStore(path).load()).toEqual({
+      participants: {
+        p01: {
+          n: 1,
+          operativeId: "OPERATIVE-01",
+          ip: "10.61.0.101",
+          sshPort: 2201,
+          password: "acorn-amber-anchor-arrow",
+          solanaPubkey: "example-public-key",
+          solanaSecretKey: [1, 2, 3],
+          revealedRooms: [],
+          createdAt: "2026-07-16T00:00:00.000Z",
+        },
+      },
+    });
   });
 });

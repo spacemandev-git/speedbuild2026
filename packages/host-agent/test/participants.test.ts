@@ -44,7 +44,7 @@ describe("participant identity derivation", () => {
       hostLanHint: "192.0.2.10",
       sunburstOrKey: "or-key",
     };
-    let state: HostAgentState = { participants: {}, apiKeysAssigned: [] };
+    let state: HostAgentState = { participants: {} };
     const pushedContent: Array<{
       content: string;
       destination: string;
@@ -62,7 +62,6 @@ describe("participant identity derivation", () => {
         if (failRoomNotice && command[0] === "bash" && command[2]?.includes('inbox="/home/operative/bureau/inbox.md"')) {
           throw new Error("wall unavailable");
         }
-        if (container === "inference") return "api-key-01";
         if (container === "admin") {
           return "123e4567-e89b-42d3-a456-426614174000 AbCdEf0123456789 zYxWvU9876543210";
         }
@@ -126,7 +125,6 @@ describe("participant identity derivation", () => {
 
       const environment = pushedContent.find((entry) => entry.destination.endsWith(".bureau-env"));
       expect(environment?.destination).toBe("/home/operative/.bureau-env");
-      expect(environment?.content).toContain("export BUREAU_API_KEY='api-key-01'");
       expect(environment?.content).toContain("export OPERATIVE_ID='OPERATIVE-01'");
       expect(environment?.content).toContain("export SOLANA_KEYPAIR=/home/operative/.config/solana/id.json");
       expect(environment?.content).toContain("export SUNBURST_OR_KEY='or-key'");
@@ -214,8 +212,6 @@ describe("participant removal", () => {
     password: "alpha-bravo-charlie-delta",
     solanaPubkey: "pubkey",
     solanaSecretKey: [],
-    apiKeyIndex: 1,
-    apiKey: "api-key-01",
     revealedRooms: [],
     createdAt: "2026-01-01T00:00:00.000Z",
     status: "Running",
@@ -228,7 +224,6 @@ describe("participant removal", () => {
   } {
     let state: HostAgentState = {
       participants: { p01: structuredClone(record) },
-      apiKeysAssigned: [record.apiKeyIndex],
     };
     const deleted: string[] = [];
     const incus = {
@@ -294,7 +289,6 @@ describe("participant removal", () => {
 
       expect(harness.deleted).toEqual(["p01"]);
       expect(harness.state().participants.p01).toBeUndefined();
-      expect(harness.state().apiKeysAssigned).toEqual([]);
       expect(result.warnings).toEqual([
         "bureau-api operative deregistration failed: bureau-api returned 500",
       ]);

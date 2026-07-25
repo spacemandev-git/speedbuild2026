@@ -24,11 +24,10 @@ container mode and small-scale resources regardless. All programs branch via hel
 | bridge | `sbbr0` | 10.61.0.1/24 (host gw) | — | host-agent listens here |
 | VM | `admin` | 10.61.0.10 | 8 CPU / 24 GiB | admin-dashboard (:3000), asciinema-server (:4000, docker) |
 | VM | `challenges` | 10.61.0.20 | 12 CPU / 64 GiB | surfpool (:8899/:8900), bureau-api (:8700/:8701/:8702/:8703/:8710) |
-| VM | `inference` | 10.61.0.30 | 48 CPU / 640 GiB | llama-server (:8080) |
 | VM | `p01`…`pNN` | 10.61.0.101+ (p01=101) | 4 CPU / 8 GiB / 30 GiB disk | sshd, participant env |
 | VM | `p-template` | DHCP (stopped) | participant profile | golden image for `incus copy` |
 
-VM memory is effectively reserved: defaults sum to ≈968 GiB for 30 participants, leaving
+VM memory is effectively reserved: defaults sum to ≈328 GiB for 30 participants, leaving
 headroom for host + ZFS ARC (cap ARC in host tuning). `security.nesting` is a container-mode-only
 concern (VMs run Docker natively).
 
@@ -76,8 +75,7 @@ fabric). Fixed `hwaddr` on every device so the netplan `match:` is stable across
 - `challenges` :8899/:8900 → host :8899/:8900 (surfpool RPC/WS, for organizer laptops)
 - `pNN` :22 → host :(SB_SSH_PORT_BASE+N), e.g. p01 → 2201
 
-Participants reach `challenges` and `inference` directly via bridge IPs (all containers share
-`sbbr0`). Inference is NOT exposed to the LAN.
+Participants reach `challenges` directly via its bridge IP (all containers share `sbbr0`).
 
 ## 2. Repo layout & task ownership
 
@@ -86,8 +84,7 @@ bootstrap.sh                  # single entrypoint (root, fresh Ubuntu 24.04)
 config/speedbuild.env.example # all config keys (copied to config/speedbuild.env)
 host/                         # host-side bash: 00-base, 10-incus, 20-zones, 30-participant-template,
                               #   40-host-agent, 50-deploy-challenges, lib.sh
-zones/participant/            # runs INSIDE p-template: setup.sh, rec-shell, opencode template
-zones/inference/              # runs INSIDE inference: setup.sh, llama-server.service template, download-model.sh
+zones/participant/            # runs INSIDE p-template: setup.sh, rec-shell, opencode config
 zones/challenges/             # runs INSIDE challenges: setup.sh, surfpool.service, deploy programs
 zones/admin/                  # runs INSIDE admin: setup.sh, asciinema docker-compose, dashboard service
 packages/bureau-registry/     # Anchor program (Rooms 1 & 4)
@@ -109,10 +106,7 @@ SB_PARTICIPANT_COUNT (30)        SB_SSH_PORT_BASE (2200)
 SB_OPERATIVE_POOL (24, min 16)
 SB_BRIDGE_NAME (sbbr0)           SB_SUBNET_PREFIX (10.61.0)
 SB_BUREAU_SECRET (hex, required) SB_ADMIN_TOKEN (required)     SB_HOST_AGENT_TOKEN (required)
-SB_ZPOOL_SIZE (2000GiB)          SB_MODELS_DIR (/var/lib/speedbuild/models)
-SB_MODEL_HF_REPO (unsloth/GLM-5.2-GGUF)  SB_MODEL_QUANT (UD-Q2_K_XL)  SB_MODEL_ALIAS (glm-5.2)
-SB_LLAMA_THREADS (48)  SB_LLAMA_PARALLEL (4)  SB_LLAMA_CTX_TOTAL (262144)
-SB_INFER_CPUS (48)  SB_INFER_MEM (640GiB)
+SB_ZPOOL_SIZE (2000GiB)          SUNBURST_OR_KEY (OpenRouter key)
 SB_CHAL_CPUS (12)   SB_CHAL_MEM (64GiB)
 SB_ADMIN_CPUS (8)   SB_ADMIN_MEM (24GiB)
 SB_PART_CPUS (4)    SB_PART_MEM (8GiB)   SB_PART_DISK (30GiB)
@@ -120,7 +114,7 @@ SB_TENANT_MODE (vm) # vm | container; container forced when SB_SMOKE_TEST=1
 SB_SRIOV_ENABLE (1) # 0 disables all SR-IOV/IOMMU steps and the sb-vf profile
 SB_SRIOV_PF ()      # host netdev name of the E2100 PF, e.g. enp1s0f0 (required when enabled)
 SB_SRIOV_VF_COUNT (40)
-SB_SMOKE_TEST (0)   # 1 = tiny model (Qwen2.5-0.5B GGUF), 2 participants, small limits, container mode, SR-IOV skipped
+SB_SMOKE_TEST (0)   # 1 = 2 participants, small limits, container mode, SR-IOV skipped
 ```
 
 Derived IP/port constants live in `host/lib.sh` (bash) and are duplicated as literals in each
@@ -137,7 +131,7 @@ re-runnable, `set -euo pipefail`):
    `sbpool`, bridge `sbbr0` 10.61.0.1/24), create profiles (incl. `sb-vf` when SR-IOV enabled).
 2a. `12-sriov.sh` — IOMMU kernel cmdline + GRUB (reboot-and-resume flow), persistent VF creation
    on `SB_SRIOV_PF`, verification. No-op when `SB_SRIOV_ENABLE=0`.
-3. `20-zones.sh` — launch `admin`/`challenges`/`inference` with static IPs
+3. `20-zones.sh` — launch `admin`/`challenges` with static IPs
    (`incus config device override <c> eth0 ipv4.address=…`), push the matching `zones/<name>/`
    dir + needed `packages/*` dirs into the container (`incus file push -r`), run its `setup.sh`
    via `incus exec`, add proxy devices.
@@ -160,26 +154,17 @@ re-runnable, `set -euo pipefail`):
   `$ASCIINEMA_SESSION`; interactive → `exec asciinema session -o /var/log/sessions/$USER-<ts>.cast -r -c "/bin/bash -l"`,
   falling back to plain bash. asciinema server URL config → `http://10.61.0.10:4000`.
 - OpenCode global config `/home/operative/.config/opencode/opencode.json`:
-  provider `bureau` via `@ai-sdk/openai-compatible`, baseURL `http://10.61.0.30:8080/v1`,
-  apiKey `{env:BUREAU_API_KEY}`, model `glm-5.2` with `limit.context = SB_LLAMA_CTX_TOTAL / SB_LLAMA_PARALLEL`,
-  `"model": "bureau/glm-5.2"`.
-- `~/.bureau-env` and the login environment contain `OPERATIVE_ID`, `BUREAU_API_KEY`, and
-  `SOLANA_KEYPAIR` values filled at provision time by host-agent.
+  provider `openrouter`, runtime key token `{env:SUNBURST_OR_KEY}`, default model
+  `openai/gpt-5.6-sol`, and selectable alternative `z-ai/glm-5.2`.
+- `~/.bureau-env` and the login environment contain `OPERATIVE_ID`, `SOLANA_KEYPAIR`, and,
+  when configured, `SUNBURST_OR_KEY` values filled at provision time by host-agent.
 - `~/bureau/` dir with README; challenge briefs appear at `~/bureau/rooms/<roomN>/` on reveal.
 
-## 6. Inference zone (`zones/inference/setup.sh`)
+## 6. OpenCode model access
 
-- Build llama.cpp from source (CPU only, `GGML_NATIVE=ON`, static, targets `llama-server`).
-- `download-model.sh`: `hf download $SB_MODEL_HF_REPO --include "*$SB_MODEL_QUANT*"` into
-  `/models` (host dataset `SB_MODELS_DIR` mounted as Incus disk device — survives rebuilds).
-  Smoke mode: `Qwen/Qwen2.5-0.5B-Instruct-GGUF` q4.
-- `/etc/llama/api-keys.txt`: 64 pre-generated keys (`sb-<32hex>`), created once at setup;
-  host-agent assigns one per participant (never restarts llama-server).
-- systemd `llama-server.service` templated from config:
-  `--host 0.0.0.0 --port 8080 --alias $SB_MODEL_ALIAS --api-key-file /etc/llama/api-keys.txt
-  --threads $SB_LLAMA_THREADS --ctx-size $SB_LLAMA_CTX_TOTAL --parallel $SB_LLAMA_PARALLEL
-  --cache-type-k q8_0 --cache-type-v q8_0 --flash-attn on --jinja --mlock
-  --temp 1.0 --top-p 0.95 --min-p 0.01`.
+Participant OpenCode sessions use OpenRouter over the network. The host-agent copies the shared
+`SUNBURST_OR_KEY` into each box at provision or reset time. GPT 5.6 Sol is the default model and
+GLM 5.2 remains selectable in OpenCode.
 
 ## 7. Challenges zone (`zones/challenges/`)
 
@@ -314,11 +299,10 @@ Bearer auth `SB_HOST_AGENT_TOKEN`. State file `/var/lib/speedbuild/state.json`. 
 - `POST /participants` `{name?}` → next free `pNN`: `incus copy p-template pNN`, static IP
   `.100+N`, start, SSH proxy device `host:2200+N → :22`, set `operative` password (random) +
   authorized_key (optional input), generate Solana keypair (`@solana/kit`) → push to
-  `/home/operative/.config/solana/id.json`, assign next unused llama API key (reads
-  `/etc/llama/api-keys.txt` via `incus exec inference cat`, tracks assignment in state), write
-  `BUREAU_API_KEY`/`OPERATIVE_ID` into `/home/operative/.bureau-env`, register operative with
-  bureau-api admin (`POST /operatives` — triggers funding + `init_operative`), provision asciinema
-  stream token (best-effort; record failure in response), → returns full record.
+  `/home/operative/.config/solana/id.json`, write `OPERATIVE_ID`, `SOLANA_KEYPAIR`, and the
+  configured `SUNBURST_OR_KEY` into `/home/operative/.bureau-env`, register operative with
+  bureau-api admin (`POST /operatives` — triggers funding + `init_operative`), provision
+  asciinema stream token (best-effort; record failure in response), → returns full record.
 - `GET /participants`, `GET /participants/:name` (merges state.json + live `incus list` status)
 - `POST /participants/:name/reveal` `{room}` → `incus file push -r` of
   `packages/challenges-content/rooms/<room>/` → `/home/operative/bureau/rooms/<room>/` + call
@@ -326,7 +310,7 @@ Bearer auth `SB_HOST_AGENT_TOKEN`. State file `/var/lib/speedbuild/state.json`. 
 - `POST /participants/:name/(suspend|resume|reset)` — stop/start/`delete+recopy` (reset keeps
   identity: re-applies IP, keys, reveals).
 - `DELETE /participants/:name`
-- `GET /zones` — incus + `systemctl is-active` (via `incus exec`) health for the three zones.
+- `GET /zones` — incus + `systemctl is-active` (via `incus exec`) health for both zones.
 - `GET /health`
 
 ## 11. `admin-dashboard` (`packages/admin-dashboard`, SvelteKit, Svelte 5 runes, Bun)
@@ -336,7 +320,7 @@ happen server-side (SvelteKit endpoints proxy host-agent :7000 and bureau-api :8
 tokens); the browser talks only to the dashboard + asciinema-server (:4000 ws for live players).
 
 Pages:
-- **Overview** — zone health cards, surfpool slot/health, llama-server /health + /slots, event feed (SSE).
+- **Overview** — zone health cards, surfpool slot/health, operative count, event feed (SSE).
 - **Participants** — provision button, table (name, IP, SSH port, status, revealed rooms, wallet
   CRED/SOL balances via bureau-api), per-participant drawer: credentials, live terminal
   (asciinema-player ws embed), reveal/suspend/reset actions.
@@ -367,14 +351,12 @@ Pages:
 
 ## 13. Smoke test mode
 
-`SB_SMOKE_TEST=1`: 2 participants, tiny model, low limits — full pipeline testable on any Ubuntu
-24.04 VM (including nested-virt-capable cloud VM). Everything else identical.
+`SB_SMOKE_TEST=1`: 2 participants and low limits — full pipeline testable on any Ubuntu 24.04 VM
+(including nested-virt-capable cloud VM). Everything else identical.
 
 ## 14. Open risks (tracked)
 
 1. asciinema token bulk provisioning (§12). 2. surfpool `--db` restart persistence (test; fallback:
 re-run deployment programs; they are idempotent). 3. SPL programs under `--offline` (deploy step 00
 handles). 4. Docker-in-Incus regressions for asciinema-server (pin Docker < 29 in admin zone).
-5. GLM 5.2 concurrency (~2–5 tok/s per user at 5–10 concurrent) — benchmark on the box; quant is
-config-swappable (Q4_K_XL recommended given 1.15 TB RAM). 6. Pay.sh custom-mint settlement
-(confirmed in source but untested end-to-end).
+5. Pay.sh custom-mint settlement (confirmed in source but untested end-to-end).

@@ -5,7 +5,7 @@ Its contents run inside Ubuntu 24.04, not on the Speedbuild host.
 The setup installs participant toolchains, CLIs, SSH, and recording support.
 It creates the unprivileged `operative` account and its initial workspace.
 `rec-shell` records interactive SSH sessions and passes commands through.
-`opencode.json.template` configures the Bureau inference endpoint.
+`opencode.json` configures the OpenRouter models available through OpenCode.
 `setup.sh` reads competition values from `/etc/speedbuild.env`.
 The host script `host/30-participant-template.sh` launches `p-template`.
 That script pushes this directory into the container at `/opt/zone`.

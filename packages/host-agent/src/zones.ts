@@ -14,11 +14,6 @@ const ZONES = {
     services: ["surfpool", "bureau-api"],
     ports: [8899, 8900, 8700, 8701, 8702, 8703, 8710],
   },
-  inference: {
-    ip: ZONE_IPS.inference,
-    services: ["llama-server"],
-    ports: [8080],
-  },
 } as const;
 
 interface ServiceHealth {

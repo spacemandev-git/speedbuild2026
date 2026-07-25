@@ -89,22 +89,8 @@ if [[ "$(sb_tenant_mode)" == container && "$(incus config get admin security.nes
 fi
 
 sb_prepare_zone challenges "${SB_IP_CHALLENGES}"
-sb_prepare_zone inference "${SB_IP_INFERENCE}"
 
-mkdir -p "${SB_MODELS_DIR}"
-# In container mode the host dir is uid-shifted and appears as nobody:nogroup
-# inside the unprivileged container, so container-root cannot write the model
-# cache. World-writable keeps it writable under both container (shifted) and VM
-# (virtiofs root) tenant modes without a mode-specific device flag.
-chmod 0777 "${SB_MODELS_DIR}"
-if sb_local_device_exists inference models; then
-  incus config device set inference models source "${SB_MODELS_DIR}"
-  incus config device set inference models path /models
-else
-  incus config device add inference models disk source="${SB_MODELS_DIR}" path=/models
-fi
-
-for zone in admin challenges inference; do
+for zone in admin challenges; do
   incus file push "${SB_REPO_ROOT}/config/speedbuild.env" "${zone}/etc/speedbuild.env"
   sb_push_tree "${zone}" "${SB_REPO_ROOT}/zones/${zone}" /opt/zone
 done
@@ -113,7 +99,7 @@ sb_push_tree challenges "${SB_REPO_ROOT}/packages/bureau-api" /opt/packages/bure
 sb_push_tree challenges "${SB_REPO_ROOT}/packages/bureau-registry" /opt/packages/bureau-registry
 sb_push_tree admin "${SB_REPO_ROOT}/packages/admin-dashboard" /opt/packages/admin-dashboard
 
-for zone in admin challenges inference; do
+for zone in admin challenges; do
   sb_log "Running ${zone} zone setup."
   sb_container_exec "${zone}" bash /opt/zone/setup.sh
 done

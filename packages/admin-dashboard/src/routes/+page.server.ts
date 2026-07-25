@@ -25,21 +25,12 @@ async function surfpoolRpc<T>(method: 'getHealth' | 'getSlot'): Promise<T> {
   return payload.result;
 }
 
-async function llamaHealth(): Promise<unknown> {
-  const response = await fetch('http://10.61.0.30:8080/health', {
-    headers: { accept: 'application/json' }
-  });
-  if (!response.ok) throw new Error(`llama-server returned HTTP ${response.status}`);
-  return response.json();
-}
-
 export const load: PageServerLoad = async () => {
-  const [zones, participants, surfpoolHealth, surfpoolSlot, llama] = await Promise.all([
+  const [zones, participants, surfpoolHealth, surfpoolSlot] = await Promise.all([
     capture(() => hostAgent.zones()),
     capture(() => hostAgent.participants()),
     capture(() => surfpoolRpc<string>('getHealth')),
-    capture(() => surfpoolRpc<number>('getSlot')),
-    capture(llamaHealth)
+    capture(() => surfpoolRpc<number>('getSlot'))
   ]);
 
   return {
@@ -47,7 +38,6 @@ export const load: PageServerLoad = async () => {
     participantCount: participants.ok ? participants.data.length : null,
     participantError: participants.ok ? null : participants.error,
     surfpoolHealth,
-    surfpoolSlot,
-    llama
+    surfpoolSlot
   };
 };

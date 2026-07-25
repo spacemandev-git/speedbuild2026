@@ -14,7 +14,6 @@ One bare-metal Ubuntu 24.04 server, Sunburst, runs isolated Incus tenants on the
 |---|---|---|
 | `admin` | `10.61.0.10` | Admin dashboard (`:3000` → host `:8080`), asciinema server (`:4000`) |
 | `challenges` | `10.61.0.20` | surfpool (`:8899`/`:8900`), bureau-api (`:8700`–`:8710`) |
-| `inference` | `10.61.0.30` | llama-server (`:8080`), not exposed to the LAN |
 | `p01`…`pNN` | `10.61.0.101+` | One isolated box per operative, SSH proxied to host port `2200+N` |
 | host | `10.61.0.1` | host-agent provisioning API (`:7000`) |
 
@@ -29,8 +28,7 @@ Three services matter operationally:
   bureau-api server-side; login uses `SB_ADMIN_TOKEN`.
 
 The venue LAN can reach the dashboard (`:8080`), asciinema (`:4000`), surfpool RPC/WS
-(`:8899`/`:8900`, for organizer laptops), and participant SSH ports. Inference is never exposed
-to the LAN.
+(`:8899`/`:8900`, for organizer laptops), and participant SSH ports.
 
 ## 2. Before the event — configuration
 
@@ -62,9 +60,8 @@ The full list is documented in `config/speedbuild.env.example`.
 | `SB_OPERATIVE_POOL` | `24` | Number of operative IDs whose codes are generated in advance; minimum `16`. |
 | `SB_TENANT_MODE` | `container` | Validated default. Use `vm` only with a dedicated non-bonded SR-IOV NIC and console/BMC recovery. |
 | `SB_SRIOV_ENABLE` | `0` | Leave disabled unless intentionally using VF passthrough. |
-| `SB_MODEL_HF_REPO` / `SB_MODEL_QUANT` / `SB_MODEL_ALIAS` | `Qwen3.6-35B-A3B` / `Q8_0` / `qwen3.6` | Shared model. Only one large model should be resident. |
-| `SB_LLAMA_PARALLEL` | `8` | Concurrent request slots; total context is divided across slots. |
-| `SB_SMOKE_TEST` | `0` | `1` provisions two participants, a tiny model, small limits, container mode, and no SR-IOV. |
+| `SUNBURST_OR_KEY` | blank | Shared OpenRouter key for participant OpenCode access to GPT 5.6 Sol. |
+| `SB_SMOKE_TEST` | `0` | `1` provisions two participants with small limits, container mode, and no SR-IOV. |
 
 `SB_OPERATIVE_POOL` is independent of provisioning. Codes are generated for
 `OPERATIVE-01`…`OPERATIVE-NN` the night before. Assign IDs at check-in; unused IDs become
@@ -73,8 +70,8 @@ reserves.
 ### 2.3 Smoke test first
 
 Run a smoke deployment before production. Set `SB_SMOKE_TEST=1` and bootstrap on Ubuntu 24.04.
-The smoke run exercises zones, model service, surfpool, deployment, provisioning, and recording
-with two participants and a tiny model. Everything except scale follows the production flow.
+The smoke run exercises zones, surfpool, deployment, provisioning, and recording with two
+participants. Everything except scale follows the production flow.
 
 ### 2.4 SR-IOV / VM mode
 
@@ -95,8 +92,8 @@ sudo ./bootstrap.sh
 ```
 
 Bootstrap runs idempotent, re-runnable stages: base packages; Incus, ZFS, and bridge; optional
-SR-IOV; `admin`/`challenges`/`inference` zones; participant template; host-agent; and challenge
-deployment. Completed stages record markers and are skipped.
+SR-IOV; `admin`/`challenges` zones; participant template; host-agent; and challenge deployment.
+Completed stages record markers and are skipped.
 
 Successful bootstrap prints:
 
@@ -130,9 +127,6 @@ curl -sS -X POST -H 'Content-Type: application/json' \
   --data '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' \
   http://10.61.0.20:8899 | jq
 
-# Inference health over the bridge:
-curl -sS http://10.61.0.30:8080/health | jq
-
 # bureau-api health:
 curl -sS -H "Authorization: Bearer $SB_ADMIN_TOKEN" \
   http://10.61.0.20:8710/health | jq
@@ -143,9 +137,9 @@ Open `http://<host-lan-ip>:8080` and log in with `SB_ADMIN_TOKEN`.
 ## 4. Provisioning operatives
 
 Provisioning copies the `p-template` box, assigns a static IP and SSH proxy port, sets a random
-`operative` password and optional SSH key, generates and funds a Solana keypair, assigns a private
-inference API key, writes `OPERATIVE_ID` and `BUREAU_API_KEY`, registers the operative with
-bureau-api, calls `init_operative`, and provisions an asciinema stream token.
+`operative` password and optional SSH key, generates and funds a Solana keypair, writes
+`OPERATIVE_ID`, `SOLANA_KEYPAIR`, and the configured `SUNBURST_OR_KEY`, registers the operative
+with bureau-api, calls `init_operative`, and provisions an asciinema stream token.
 
 ### Dashboard path
 
@@ -191,8 +185,7 @@ The operative registry uses top-level key `operatives`.
 
 Log in at `http://<host-lan-ip>:8080` with `SB_ADMIN_TOKEN`.
 
-- **Overview** — zone health, surfpool slot/health, inference `/health` and `/slots`, and the live
-  SSE event feed.
+- **Overview** — zone health, surfpool slot/health, operative count, and the live SSE event feed.
 - **Participants** — provision button, participant table, and drawers for credentials, terminal,
   reveal, suspend, and reset.
 - **Live Wall** — every active operative terminal for production monitoring.
@@ -278,7 +271,7 @@ All actions are available in the participant drawer and through host-agent:
 | Suspend | `POST /participants/:name/suspend` | Stops the box while retaining identity. |
 | Resume | `POST /participants/:name/resume` | Starts a suspended box. |
 | Reset | `POST /participants/:name/reset` | Rebuilds from the template and reapplies IP, keys, identity, and reveals. |
-| Delete | `DELETE /participants/:name` | Destroys the box and releases its inference API key. |
+| Delete | `DELETE /participants/:name` | Destroys the box and removes its stored identity. |
 
 ```sh
 curl -sS -X POST -H "Authorization: Bearer $SB_HOST_AGENT_TOKEN" \
@@ -306,9 +299,8 @@ Reset is the standard recovery for a damaged participant environment.
 | A zone is down | Check `GET /zones` or Overview, then `incus list` and `incus exec <zone> systemctl status <svc>`. |
 | surfpool is unhealthy after reboot | Verify the `--db` state file. If necessary rerun `host/50-deploy-challenges.sh` or `sudo ./bootstrap.sh --from 50-deploy-challenges`; deployment programs are idempotent. |
 | bureau-api is down | In `challenges`, inspect `systemctl status bureau-api.service` and `/var/lib/bureau-api/state.sqlite`; then rerun the challenge deployment stage if needed. |
-| Model missing or inference returns `503` | Model download requires setup-time internet and stores the GGUF in host-mounted `SB_MODELS_DIR`. Rerun inference setup if absent. |
 | SPL programs missing | `00-ensure-spl.ts` loads bundled `.so` files in offline mode. Rerun deployment if it was skipped. |
-| Inference is slow | A few tokens per second is expected at 5–10 concurrent users. Check `SB_LLAMA_PARALLEL` and Overview slot use; change quantization if necessary. |
+| OpenCode cannot reach its model | Verify `SUNBURST_OR_KEY` is configured and participant boxes have outbound network access. |
 | Operative cannot log in | Resume a suspended box or reset a damaged one. Recording failure does not block login. |
 | `/brief/:room?operative=` returns `404` | The room has not been revealed to that operative. Reveal it. |
 | Room 1 registration state is missing | Compare `/var/lib/bureau/operatives.json`, bureau-api `GET /state`, the `VerificationRecord`, and deployment logs for `init_operative`. |
@@ -321,7 +313,6 @@ Every bootstrap stage and deployment program is idempotent and re-runnable. Pref
 
 - Keep `SB_BUREAU_SECRET`, `SB_ADMIN_TOKEN`, and `SB_HOST_AGENT_TOKEN` private. Rotating
   `SB_BUREAU_SECRET` changes every code and lock assignment; never rotate it during the event.
-- Do not expose inference `:8080` to the LAN.
 - Do not expose the unauthenticated asciinema admin port `:4002`.
 - Solana devnet and the pre-funded custom `CRED` token prevent mainnet and real-money exposure.
 - Keep host-agent input validation restricted to `[a-z0-9-]`; never pass unvalidated input to a

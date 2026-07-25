@@ -2,7 +2,6 @@
   import { browser } from '$app/environment';
   import LiveTerminal from '$lib/components/LiveTerminal.svelte';
   import {
-    participantApiKey,
     participantOperativeId,
     participantIp,
     participantPassword,
@@ -76,7 +75,6 @@
         <div><dt>SSH command</dt><dd>{sshCommand}</dd></div>
         <div><dt>Password</dt><dd>{participantPassword(data.participant) ?? 'not retained'}</dd></div>
         <div><dt>Wallet public key</dt><dd>{participantPublicKey(data.participant) ?? 'not reported'}</dd></div>
-        <div><dt>Bureau API key</dt><dd>{participantApiKey(data.participant) ?? 'not reported'}</dd></div>
       </dl>
       {#if warnings.length > 0}
         <ul class="warning-list">{#each warnings as warning, index (`${warning}-${index}`)}<li>{warning}</li>{/each}</ul>

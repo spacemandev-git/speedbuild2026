@@ -9,7 +9,7 @@ The service listens on `10.61.0.1:7000`. On development machines where that brid
 | Method | Path | Body | Purpose |
 |---|---|---|---|
 | `GET` | `/health` | — | Process health |
-| `GET` | `/zones` | — | Incus, systemd, and TCP health for all three zones |
+| `GET` | `/zones` | — | Incus, systemd, and TCP health for both zones |
 | `POST` | `/participants` | `{ "name"?: "p01", "authorizedKey"?: "ssh-ed25519 ..." }` | Provision the requested or next free participant |
 | `GET` | `/participants` | — | List state merged with live Incus status |
 | `GET` | `/participants/:name` | — | Get one participant and live status |
@@ -20,11 +20,11 @@ The service listens on `10.61.0.1:7000`. On development machines where that brid
 | `POST` | `/participants/:name/suspend` | — | Stop the participant container |
 | `POST` | `/participants/:name/resume` | — | Start the participant container |
 | `POST` | `/participants/:name/reset` | — | Rebuild while preserving identity and reveals |
-| `DELETE` | `/participants/:name` | — | Delete the container and release its API key |
+| `DELETE` | `/participants/:name` | — | Delete the container and remove its stored identity |
 
 Errors are JSON objects shaped as `{ "error": "...", "detail"?: "..." }`.
 
-Provisioning assigns an `OPERATIVE-NN` id and configures the `operative` Unix user. Runtime values are written to `/home/operative/.bureau-env` as `BUREAU_API_KEY`, `OPERATIVE_ID`, `SOLANA_KEYPAIR`, and, when configured, `SUNBURST_OR_KEY`.
+Provisioning assigns an `OPERATIVE-NN` id and configures the `operative` Unix user. Runtime values are written to `/home/operative/.bureau-env` as `OPERATIVE_ID`, `SOLANA_KEYPAIR`, and, when configured, `SUNBURST_OR_KEY`.
 
 ## Examples
 

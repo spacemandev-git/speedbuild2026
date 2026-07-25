@@ -17,15 +17,6 @@
     return ['running', 'active', 'healthy', 'ok'].includes((status ?? '').toLowerCase());
   }
 
-  function describe(value: unknown): string {
-    if (typeof value === 'string' || typeof value === 'number') return String(value);
-    if (value && typeof value === 'object') {
-      const object = value as Record<string, unknown>;
-      if (typeof object.status === 'string') return object.status;
-      if (typeof object.message === 'string') return object.message;
-    }
-    return value == null ? 'no response' : 'responding';
-  }
 </script>
 
 <div class="page-header">
@@ -62,15 +53,6 @@
     </div>
     <strong class="metric">{data.surfpoolSlot.ok ? `slot ${data.surfpoolSlot.data.toLocaleString()}` : 'slot unavailable'}</strong>
     <small>{data.surfpoolHealth.ok ? data.surfpoolHealth.data : data.surfpoolHealth.error}</small>
-  </article>
-
-  <article class="health-card" class:error={!data.llama.ok}>
-    <div class="health-card-header">
-      <h2>Inference</h2>
-      <span class="status-label"><span class="status-dot" class:good={data.llama.ok}></span>{data.llama.ok ? 'responding' : 'fault'}</span>
-    </div>
-    <strong class="metric">llama-server</strong>
-    <small>{data.llama.ok ? describe(data.llama.data) : data.llama.error}</small>
   </article>
 
   <article class="health-card" class:error={data.participantCount === null}>

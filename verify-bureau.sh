@@ -36,7 +36,7 @@ curl -sS -m 5 "${PUB}/brief/room1?operative=OPERATIVE-01" | jq .
 curl -sS -m 5 -o /dev/null -w 'OPERATIVE-02 room1 -> HTTP %{http_code}\n' "${PUB}/brief/room1?operative=OPERATIVE-02"
 
 echo "== inside p01: user, env, brief file"
-incus exec p01 -- bash -lc 'id -un operative; grep -o "OPERATIVE_ID\|BUREAU_API_KEY" /home/operative/.bureau-env | sort -u; ls /home/operative/bureau/rooms/room1/'
+incus exec p01 -- bash -lc 'id -un operative; grep -o "OPERATIVE_ID\|SOLANA_KEYPAIR" /home/operative/.bureau-env | sort -u; ls /home/operative/bureau/rooms/room1/'
 
 echo "== admin state summary"
 admin "${ADMIN}/state" | jq '{operatives: (.operatives|length), reveals: (.reveals|length), roomsComplete, lastEvents: [.recentEvents[-4:][] | .type]}'
