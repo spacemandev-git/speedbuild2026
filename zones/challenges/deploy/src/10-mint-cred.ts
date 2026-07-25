@@ -44,10 +44,14 @@ async function main(): Promise<void> {
 
   const deployer = await loadKeypair();
   const balance = await connection.getBalance(deployer.publicKey, "confirmed");
+  // Surfpool rejects an airdrop below the rent-exempt minimum, so a deployer
+  // sitting just under the target must ask for a whole SOL rather than the dust
+  // shortfall — otherwise every rerun fails on an already-funded deployer.
   if (balance < 10 * LAMPORTS_PER_SOL) {
+    const shortfall = 10 * LAMPORTS_PER_SOL - balance;
     const signature = await connection.requestAirdrop(
       deployer.publicKey,
-      10 * LAMPORTS_PER_SOL - balance,
+      Math.max(shortfall, LAMPORTS_PER_SOL),
     );
     await connection.confirmTransaction(signature, "confirmed");
   }
