@@ -21,7 +21,7 @@ Three services matter operationally:
 
 - **host-agent** on `:7000` provisions, reveals to, and manages participant boxes. It uses bearer
   `SB_HOST_AGENT_TOKEN`.
-- **bureau-api** provides on-chain watchers, x402 resources and facilitators, Pay.sh ledger nodes,
+- **bureau-api** provides on-chain watchers, x402 resources and facilitators, Room 5 ledger nodes,
   deterministic result generation, and the `:8710` admin surface. It runs as
   `bureau-api.service`; admin calls use bearer `SB_ADMIN_TOKEN`.
 - **admin-dashboard** is reached at `http://<host-lan-ip>:8080`. It proxies host-agent and

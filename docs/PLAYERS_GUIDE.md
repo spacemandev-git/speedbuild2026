@@ -15,7 +15,7 @@ At check-in you receive:
 - SSH access to an isolated Linux box, reachable over the venue network on an assigned port.
 - A password. If you supplied an SSH public key in advance, it is already installed.
 
-Your box includes a pre-funded wallet, the complete Solana/x402/Pay.sh toolchain, and an AI
+Your box includes a pre-funded wallet, the complete Solana and x402 toolchain, and an AI
 coding agent. No installation is required to start.
 A copy of this guide is pre-installed at `~/PLAYERS_GUIDE.md` on every box.
 
@@ -110,7 +110,7 @@ Everything required is on `PATH`:
 | `solana`, `spl-token` | Solana CLI and SPL token operations, preconfigured for the event RPC |
 | `anchor`, `cargo`, `rustc` | Anchor and Rust development |
 | `bun`, `node`, `npm` | TS/JS and `@solana/kit`/`web3.js` programs |
-| `pay` | Pay.sh CLI for x402-gated calls in Room 5 — Memory Path |
+| `x402-curl` | Pays x402-gated requests with your own keypair — Room 5, Memory Path. `-v` shows the terms and settlement signature |
 | `jq` | Parse and select JSON response data |
 | `tmux` | Keep multiple panes and survive a dropped SSH connection |
 | `git`, `vim`, `nano` | Standard development tools |
@@ -144,7 +144,7 @@ It is useful for:
 
 - Generating focused boilerplate, such as reading an account and printing raw bytes.
 - Decoding data after you provide the exact offset table and bytes.
-- Explaining the x402 402→pay→retry cycle, SPL Memo instructions, or `pay curl`.
+- Explaining the x402 402→pay→retry cycle, SPL Memo instructions, or `x402-curl`.
 - Debugging when you provide the error, source, and live parameters.
 
 Be careful when it:

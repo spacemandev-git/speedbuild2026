@@ -146,8 +146,10 @@ re-runnable, `set -euo pipefail`):
 
 - User `operative` (sudo-less), shell = `/usr/local/bin/rec-shell`.
 - Install: build-essential, git, jq, curl, node 22 (via apt/nodesource) **and bun**, Rust
-  (rustup, stable), Solana CLI (Agave), Anchor via avm, `spl-token` CLI, Pay.sh CLI
-  (`npm i -g @solana/pay`), asciinema **3.2.x static binary** (NOT the apt 2.x package),
+  (rustup, stable), Solana CLI (Agave), Anchor via avm, `spl-token` CLI, the first-party
+  `x402-curl` client (`packages/x402-curl` → `/opt/x402-curl` + a `/usr/local/bin` wrapper),
+  Pay.sh CLI (`npm i -g @solana/pay`, vestigial — unusable headless, no room depends on it),
+  asciinema **3.2.x static binary** (NOT the apt 2.x package),
   OpenCode (`curl -fsSL https://opencode.ai/install | bash` to /usr/local/bin).
 - Solana CLI default: `solana config set -u http://10.61.0.20:8899`.
 - `rec-shell` (fail-open bash wrapper, per research): non-interactive/SFTP passthrough; guards
@@ -233,7 +235,7 @@ One process, multiple listeners:
 | 8700 | Public: `GET /brief/:room?operative=`; Room 2 `/component/:operative`, `/authorize/:operative`; Room 3 `/fragment/:operative`, `/reconstruct/*`; Room 4 `POST /code/present` |
 | 8701 | Honest x402 facilitator (`/verify`, `/settle`, `/supported`) — `@x402/svm` + `@x402/core`, RPC → `http://127.0.0.1:8899` |
 | 8702 | FAC-A trap facilitator: settles for real, but flags the operative's fragment as poisoned |
-| 8703 | Room 5 ledger nodes: `/node/start?operative=`, `/node/:id?operative=` — x402-v2 402 challenges payable by Pay.sh (`pay curl` with `--local`) |
+| 8703 | Room 5 ledger nodes: `/node/start?operative=`, `/node/:id?operative=` — x402-v2 402 challenges paid with the first-party `x402-curl` client (`packages/x402-curl`) |
 | 8710 | Admin, bearer `SB_ADMIN_TOKEN`: `POST /operatives`, `POST /reveal`, `POST /override`, `POST /force-complete`, `POST /rooms/:room/complete`, `GET /locks`, `GET /state`, `GET /events`, `GET /health` |
 
 `GET /brief/:room?operative=` returns `404` until the room is revealed to that operative.
@@ -359,4 +361,5 @@ Pages:
 1. asciinema token bulk provisioning (§12). 2. surfpool `--db` restart persistence (test; fallback:
 re-run deployment programs; they are idempotent). 3. SPL programs under `--offline` (deploy step 00
 handles). 4. Docker-in-Incus regressions for asciinema-server (pin Docker < 29 in admin zone).
-5. Pay.sh custom-mint settlement (confirmed in source but untested end-to-end).
+5. ~~Pay.sh custom-mint settlement~~ — resolved: Pay.sh is not used. Room 5 settles CRED through
+the honest facilitator via `x402-curl`, verified end-to-end (a clean seven-hop route on 2026-07-25).
