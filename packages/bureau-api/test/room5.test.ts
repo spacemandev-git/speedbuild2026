@@ -24,7 +24,7 @@ function fixture(): { ctx: AppContext; settle: Room5Settler; settlements: { coun
       network: "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
       amount: "200",
       asset: mint.toBase58(),
-      payTo: destination,
+      payTo: deployer.publicKey.toBase58(),
       maxTimeoutSeconds: 300,
       extra: { feePayer: deployer.publicKey.toBase58() },
     },

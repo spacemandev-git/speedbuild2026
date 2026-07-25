@@ -124,6 +124,25 @@ if ! command -v pay >/dev/null 2>&1; then
   npm install -g @solana/pay
 fi
 
+install_x402_curl() {
+  if [[ ! -f /opt/x402-curl/package.json ]]; then
+    echo "x402-curl package is absent; skipping x402-curl installation" >&2
+    return 0
+  fi
+
+  (
+    cd /opt/x402-curl
+    /usr/local/bin/bun install --frozen-lockfile
+  )
+  cat >"$WORK_DIR/x402-curl" <<'EOF'
+#!/bin/sh
+exec /usr/local/bin/bun /opt/x402-curl/src/index.ts "$@"
+EOF
+  install_managed_file "$WORK_DIR/x402-curl" /usr/local/bin/x402-curl 0755 root root
+  chmod -R a+rX /opt/x402-curl
+}
+install_x402_curl
+
 # Release 3.2.0 provides this static musl executable directly (not as an archive).
 if [[ ! -x /usr/local/bin/asciinema ]] \
   || ! /usr/local/bin/asciinema --version | grep -Fq "$ASCIINEMA_VERSION"; then

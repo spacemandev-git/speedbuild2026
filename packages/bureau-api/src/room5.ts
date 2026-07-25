@@ -153,17 +153,22 @@ function configuredDecoys(ctx: AppContext, operativeId: string): number[] {
   return [...new Set(normalized)];
 }
 
-async function paymentTerms(ctx: AppContext): Promise<PaymentTerms> {
+// x402 exact-SVM advertises payTo as the recipient WALLET and the payer derives its
+// associated token account, so the settled transfer lands on the ATA rather than on
+// payTo itself. Room 2 makes the same distinction via payToOwner/componentAta.
+async function paymentTerms(ctx: AppContext): Promise<{ terms: PaymentTerms; destination: string }> {
   const [mint, deployer] = await Promise.all([ctx.chain.getCredMint(), ctx.chain.getDeployer()]);
-  const payTo = getAssociatedTokenAddressSync(mint, deployer.publicKey).toBase58();
   return {
-    scheme: "exact",
-    network: X402_NETWORK,
-    amount: PAYMENT_AMOUNT.toString(),
-    asset: mint.toBase58(),
-    payTo,
-    maxTimeoutSeconds: 300,
-    extra: { feePayer: deployer.publicKey.toBase58() },
+    terms: {
+      scheme: "exact",
+      network: X402_NETWORK,
+      amount: PAYMENT_AMOUNT.toString(),
+      asset: mint.toBase58(),
+      payTo: deployer.publicKey.toBase58(),
+      maxTimeoutSeconds: 300,
+      extra: { feePayer: deployer.publicKey.toBase58() },
+    },
+    destination: getAssociatedTokenAddressSync(mint, deployer.publicKey).toBase58(),
   };
 }
 
@@ -265,8 +270,9 @@ function createRouter(runtime: () => Room5Runtime | null): Hono {
       }
 
       let terms: PaymentTerms;
+      let destination: string;
       try {
-        terms = await paymentTerms(active.ctx);
+        ({ terms, destination } = await paymentTerms(active.ctx));
       } catch {
         return c.json({ error: "service not ready" }, 503);
       }
@@ -280,7 +286,7 @@ function createRouter(runtime: () => Room5Runtime | null): Hono {
       } catch {
         return c.json(paymentRequired(terms), 402);
       }
-      if (settlement.amount !== PAYMENT_AMOUNT || settlement.destination !== terms.payTo) {
+      if (settlement.amount !== PAYMENT_AMOUNT || settlement.destination !== destination) {
         return c.json(paymentRequired(terms), 402);
       }
 

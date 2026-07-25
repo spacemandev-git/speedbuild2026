@@ -10,16 +10,16 @@ Retrieve your deployment parameters:
 curl "http://10.61.0.20:8700/brief/room5?operative=$OPERATIVE_ID"
 ```
 
-Use the `pay` CLI on the local payment network:
+Use `x402-curl` to open the first paid node:
 
 ```sh
-pay setup
-pay account list
-pay --local curl "http://10.61.0.20:8703/node/start?operative=$OPERATIVE_ID"
+x402-curl "http://10.61.0.20:8703/node/start?operative=$OPERATIVE_ID"
 ```
 
-`pay setup` creates an ephemeral pre-funded wallet. `--local` selects the local
-payment network.
+`x402-curl` performs the 402 → pay → retry cycle automatically, signing with
+your own funded keypair at `~/.config/solana/id.json`. Use
+`x402-curl -v <url>` to show the advertised payment terms and settlement
+signature.
 
 The parameters include `startUrl` with `?operative=$OPERATIVE_ID`. Preserve the
 `?operative=` query on every node request, including:

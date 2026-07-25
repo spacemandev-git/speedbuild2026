@@ -185,9 +185,10 @@ each step's output into the next, and never hardcode.
   lowercase-hex memo in the same transaction. The stored `issued_slot` is little-endian, the code
   has an expiry window, and the presentation endpoint is one-shot.
 
-- **Room 5 — Memory Path.** Run `pay setup`, then `pay whoami`. The seven-node route is
+- **Room 5 — Memory Path.** Use `x402-curl` for each paid request; it signs with your funded
+  Solana keypair and performs the 402 → pay → retry cycle automatically. The seven-node route is
   content-addressed: only the current response reveals the next ID, so `/node/3` does not exist.
-  Include `?operative=` on every request. Write a small loop around `pay curl`, parse `next`, and
+  Include `?operative=` on every request. Write a small loop around `x402-curl`, parse `next`, and
   follow it. Decoys occur at positions `{3,6}`; use the hint and follow the real `n_` node rather
   than the purchasable `d_` decoy.
 

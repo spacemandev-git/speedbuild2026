@@ -37,6 +37,7 @@ sb_wait_for_agent p-template
 sb_container_exec p-template bash -lc 'cloud-init status --wait >/dev/null 2>&1 || true'
 incus file push "${SB_REPO_ROOT}/config/speedbuild.env" p-template/etc/speedbuild.env
 sb_push_tree p-template "${SB_REPO_ROOT}/zones/participant" /opt/zone
+sb_push_tree p-template "${SB_REPO_ROOT}/packages/x402-curl" /opt/x402-curl
 
 sb_container_exec p-template bash /opt/zone/setup.sh
 incus stop p-template 2>/dev/null || true
