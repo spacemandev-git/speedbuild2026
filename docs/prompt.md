@@ -1,4 +1,4 @@
-We're going to be running the Speedbuild competition on a "Sunburst" machine (specs outlined in docs/sunburst.md).
+We're going to be running the Speedbuild competition on a "Sunburst" machine.
 
 We need to set up this repo as a set of scripts and code packages that'll bootstrap a fresh sunburst machine running ubuntu with everything we need to run this competition all through a single entrypoint.
 

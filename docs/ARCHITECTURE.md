@@ -1,8 +1,7 @@
 # Speedbuild — Sunburst Architecture
 
 Single-entrypoint bootstrap for the Speed Build 2026 ("The Bureau") competition on one bare-metal
-Ubuntu 24.04 "Sunburst" box (AMD EPYC 9555P 64C/128T, 1.15 TB DDR5, 6.4 TB NVMe, no GPU,
-Intel E2100 IPU NIC). This document is the **contract**: file layout, network plan, config keys,
+Ubuntu 24.04 "Sunburst" box. This document is the **contract**: file layout, network plan, config keys,
 API shapes, and per-component specs. Builder tasks implement exactly what is written here.
 
 ## 1. Tenants (Incus)
